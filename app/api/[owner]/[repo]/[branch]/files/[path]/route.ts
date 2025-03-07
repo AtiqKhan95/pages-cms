@@ -204,7 +204,6 @@ const githubSaveFile = async (
         sha: sha || undefined,
       });
 
-      // TODO: is that really what I have to do here?
       if (response.data.content && response.data.commit) {
         return response;
       } else {
