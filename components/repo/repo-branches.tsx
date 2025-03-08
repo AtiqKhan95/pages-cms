@@ -7,10 +7,12 @@ import { useConfig } from "@/contexts/config-context";
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils";
-import { Check, Loader } from "lucide-react";
+import { Check, Loader, GitPullRequest, GitMerge, RefreshCw } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { BranchStatus } from "@/app/api/[owner]/[repo]/branches/status/route";
 
 export function RepoBranches() {
-  const { owner, repo, branches, setBranches } = useRepo();
+  const { owner, repo, branches, setBranches, branchStatuses, refreshBranchStatuses, isBranchStatusLoading } = useRepo();
   const { config } = useConfig();
 
   const [search, setSearch] = useState("");
@@ -71,6 +73,65 @@ export function RepoBranches() {
     return <div className="text-muted-foreground p-4">No branches.</div>;
   }
 
+  // Get branch status by name
+  const getBranchStatus = (branchName: string): BranchStatus | undefined => {
+    return branchStatuses.find(status => status.name === branchName);
+  };
+
+  // Render branch status icon
+  const renderBranchStatus = (branchName: string) => {
+    const status = getBranchStatus(branchName);
+    
+    if (!status) return null;
+    
+    switch (status.status) {
+      case 'has_pr':
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a 
+                  href={status.prUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="ml-auto text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300"
+                >
+                  <GitPullRequest className="h-4 w-4" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Has open PR #{status.prNumber}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      case 'merged':
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a 
+                  href={status.prUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="ml-auto text-purple-500 hover:text-purple-600 dark:text-purple-400 dark:hover:text-purple-300"
+                >
+                  <GitMerge className="h-4 w-4" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Merged via PR #{status.prNumber}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="flex flex-col gap-y-2">
       <header className="flex gap-x-2">
@@ -86,6 +147,18 @@ export function RepoBranches() {
           {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
         </Button>
       </header>
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="text-sm font-medium">Branches</h3>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => refreshBranchStatuses()} 
+          disabled={isBranchStatusLoading}
+          className="h-8 px-2"
+        >
+          <RefreshCw className={cn("h-4 w-4", isBranchStatusLoading && "animate-spin")} />
+        </Button>
+      </div>
       <main className="flex flex-col gap-y-1 overflow-auto max-h-[calc(100vh-9rem)] scrollbar">
         {filteredBranches && filteredBranches.length > 0
           ? filteredBranches.map(branch => (
@@ -100,6 +173,7 @@ export function RepoBranches() {
               href={`/${owner}/${repo}/${encodeURIComponent(branch)}`}
             >
               <span className="truncate">{branch}</span>
+              {renderBranchStatus(branch)}
               {branch === config?.branch && <Check className="h-4 w-4 ml-auto opacity-50" />}
             </Link>
           ))

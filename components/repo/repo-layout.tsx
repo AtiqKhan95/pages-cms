@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { RepoSidebar } from "@/components/repo/repo-sidebar";
 import { RepoPrButton } from "@/components/repo/repo-pr-button";
+import { RepoSyncChanges } from "@/components/repo/repo-sync-changes";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,9 +40,10 @@ export function RepoLayout({
         <main className="flex flex-col flex-1 relative h-screen overflow-hidden">
           <div className="h-14 xl:h-0"></div>
           <div className="flex-1 overflow-auto scrollbar p-4 md:p-6">
-            <div className="mb-4">
-              <RepoPrButton />
-            </div>
+          <div className="mb-4">
+            <RepoSyncChanges />
+            <RepoPrButton />
+          </div>
             {children}
           </div>
         </main>
