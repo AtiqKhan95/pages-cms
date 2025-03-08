@@ -9,6 +9,7 @@ import { RepoLayout } from "@/components/repo/repo-layout";
 import { EmptyCreate } from "@/components/empty-create";
 import { Message } from "@/components/message";
 import { Tracker } from "@/components/tracker";
+import { User } from "@/types/user";
 
 export default async function Layout({
   children,
@@ -18,9 +19,10 @@ export default async function Layout({
   params: { owner: string; repo: string; branch: string; };
 }) {
   const { session, user } = await getAuth();
-  if (!session) return redirect("/sign-in");
+  if (!session || !user) return redirect("/sign-in");
 
-  const token = await getToken(user, owner, repo);
+  // Cast the user to the expected User type since we know it has all required properties
+  const token = await getToken(user as User, owner, repo);
   if (!token) throw new Error("Token not found");
 
   const decodedBranch = decodeURIComponent(branch);
