@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getRawUrl } from "@/lib/githubImage";
-import { useRepo } from "@/components/providers/repo-provider";
+import { useRepo } from "@/contexts/repo-context";
 import { useConfig } from "@/contexts/config-context";
 import { cn } from "@/lib/utils";
 import { Loader } from "@/components/loader";

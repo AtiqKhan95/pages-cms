@@ -15,7 +15,7 @@ export async function GET(
 ) {
   try {
     const { user, session } = await getAuth();
-    if (!session || !user) return new Response(null, { status: 401 });
+    if (!session) return new Response(null, { status: 401 });
 
     let repos: any[] = [];
 

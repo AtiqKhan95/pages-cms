@@ -10,11 +10,8 @@ import {
 } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { User } from "@/types/user";
-import { DatabaseUserAttributes } from "@/lib/auth";
 
-export type TokenUser = User | DatabaseUserAttributes;
-
-const getToken = cache(async (user: TokenUser, owner: string, repo: string) => {
+const getToken = cache(async (user: User, owner: string, repo: string) => {
   if (user.githubId) return await getUserToken();
 
   const permission = await db.query.collaboratorTable.findFirst({

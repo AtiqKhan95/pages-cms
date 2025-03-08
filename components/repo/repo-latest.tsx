@@ -7,7 +7,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Ban } from "lucide-react";
-import Image from "next/image";
   
 export function RepoLatest() {
   const [latestVisit, setLatestVisit] = useState<any>(null);
@@ -52,13 +51,7 @@ export function RepoLatest() {
     <>
       {latestVisit
         ? <div className="flex gap-x-2 items-center border rounded-md px-3 py-2 text-sm">
-            <Image 
-              src={`https://github.com/${latestVisit.owner}.png`} 
-              alt={latestVisit.owner} 
-              width={24} 
-              height={24} 
-              className="rounded" 
-            />
+            <img src={`https://github.com/${latestVisit.owner}.png`} alt={latestVisit.owner} className="h-6 w-6 rounded" />
             <div className="font-medium truncate">{latestVisit.repo}</div>
             <div className="text-muted-foreground truncate">{formatDistanceToNow(new Date(latestVisit.lastVisited! * 1000))} ago</div>
             <Link

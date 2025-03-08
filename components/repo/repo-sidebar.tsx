@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useUser } from "@/contexts/user-context";
-import { useRepo } from "@/components/providers/repo-provider";
+import { useRepo } from "@/contexts/repo-context";
 import { User } from "@/components/user";
 import { RepoDropdown } from "@/components/repo/repo-dropdown";
 import { RepoNav } from "@/components/repo/repo-nav";

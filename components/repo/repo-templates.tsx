@@ -28,7 +28,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ChevronsUpDown, ArrowUpRight } from "lucide-react";
-import Image from "next/image";
   
 export function RepoTemplates({ defaultAccount }: { defaultAccount?: any }) {
   const { user } = useUser();
@@ -109,13 +108,7 @@ export function RepoTemplates({ defaultAccount }: { defaultAccount?: any }) {
               <button
                 className="border rounded-md overflow-hidden hover:cursor-pointer hover:bg-accent ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <Image 
-                  src={template.thumbnail} 
-                  alt={`Preview for ${template.name}`} 
-                  width={400}
-                  height={225}
-                  className="aspect-video"
-                />
+                <img src={template.thumbnail} alt={`Preview for ${template.name}`} className="aspect-video"/>
                 <div className="flex gap-x-2 items-center px-3 py-2 border-t border-t-accent text-sm">
                   <div dangerouslySetInnerHTML={{ __html: template.icon }} className="w-4 h-4 shrink-0" />
                   <div className="font-medium truncate">{template.name}</div>
@@ -134,13 +127,7 @@ export function RepoTemplates({ defaultAccount }: { defaultAccount?: any }) {
                   href={`https://github.com/${template.repository}`} target="_blank" 
                   className="border rounded-lg transition-all hover:bg-accent focus:bg-accent outline-none flex items-center overflow-hidden relative"
                 >
-                  <Image 
-                    src={template.thumbnail} 
-                    alt={`Preview for ${template.name}`} 
-                    width={80}
-                    height={80}
-                    className="aspect-video h-20"
-                  />
+                  <img src={template.thumbnail} alt={`Preview for ${template.name}`} className="aspect-video h-20"/>
                   <div className="flex-1 text-left flex flex-col gap-y-1 truncate px-3 py-2 h-full justify-center border-l border-l-accent">
                     <div className="tracking-tight truncate font-medium">{template.name}</div>
                     <div className="text-xs text-muted-foreground truncate">{template.repository}</div>
@@ -159,13 +146,7 @@ export function RepoTemplates({ defaultAccount }: { defaultAccount?: any }) {
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" className="px-3 col-span-3">
-                          <Image 
-                            className="rounded mr-2" 
-                            src={`https://github.com/${selectedAccount.login}.png`} 
-                            alt={`${selectedAccount.login}'s avatar`}
-                            width={24}
-                            height={24}
-                          />
+                          <img className="h-6 w-6 rounded mr-2" src={`https://github.com/${selectedAccount.login}.png`} alt={`${selectedAccount.login}'s avatar`}/>
                           <div>{selectedAccount.login}</div>
                           <ChevronsUpDown className="ml-auto h-4 w-4 opacity-50"/>
                         </Button>
@@ -173,13 +154,7 @@ export function RepoTemplates({ defaultAccount }: { defaultAccount?: any }) {
                       <DropdownMenuContent align="start" className="min-w-full">
                         {user?.accounts?.map((account: any) => (
                           <DropdownMenuItem key={account.login} onSelect={() => setSelectedAccount(account)}>
-                            <Image 
-                              className="rounded mr-2" 
-                              src={`https://github.com/${account.login}.png`} 
-                              alt={`${account.login}'s avatar`}
-                              width={24}
-                              height={24}
-                            />
+                            <img className="h-6 w-6 rounded mr-2" src={`https://github.com/${account.login}.png`} alt={`${account.login}'s avatar`}/>
                             {account.login}
                           </DropdownMenuItem>
                         ))}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRepo } from "@/components/providers/repo-provider";
+import { useRepo } from "@/contexts/repo-context";
 import { useConfig } from "@/contexts/config-context";
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"

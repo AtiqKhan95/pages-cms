@@ -3,6 +3,7 @@ import { Session, User, Lucia } from "lucia";
 import { DrizzleSQLiteAdapter, SQLiteSessionTable, SQLiteUserTable } from "@lucia-auth/adapter-drizzle";
 import { db } from "@/db";
 import { userTable, sessionTable } from "@/db/schema";
+import { GitHub } from "arctic";
 import { cookies } from "next/headers";
 
 // TODO: why do I have to cast sessions and users???
@@ -21,8 +22,7 @@ export const lucia = new Lucia(adapter, {
 			githubUsername: attributes.githubUsername,
 			githubEmail: attributes.githubEmail,
 			githubName: attributes.githubName,
-			email: attributes.email,
-			accessToken: attributes.accessToken
+			email: attributes.email
 		};
 	}
 });
@@ -41,38 +41,21 @@ export interface DatabaseUserAttributes {
 	githubEmail: string;
 	githubName: string;
 	email: string;
-	accessToken: string;
 }
 
-export type AuthResult = {
-	user: DatabaseUserAttributes | null;
-	session: Session | null;
-};
-
-export const validateSession = async (sessionId: string | null): Promise<AuthResult> => {
-	if (!sessionId) {
-		return {
-			user: null,
-			session: null
-		};
-	}
-
-	try {
-		const { session, user } = await lucia.validateSession(sessionId);
-		return { session, user: user as DatabaseUserAttributes | null };
-	} catch (error) {
-		return {
-			user: null,
-			session: null
-		};
-	}
-};
+export const github = new GitHub(process.env.GITHUB_APP_CLIENT_ID!, process.env.GITHUB_APP_CLIENT_SECRET!);
 
 export const getAuth = cache(
-	async (): Promise<AuthResult> => {
+	async (): Promise<{ user: User; session: Session } | { user: null; session: null }> => {
 		const sessionId = cookies().get(lucia.sessionCookieName)?.value ?? null;
-		const result = await validateSession(sessionId);
+		if (!sessionId) {
+			return {
+				user: null,
+				session: null
+			};
+		}
 
+		const result = await lucia.validateSession(sessionId);
 		// next.js throws when you attempt to set cookie when rendering page
 		try {
 			if (result.session && result.session.fresh) {

@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
-import { getAuth, lucia } from "@/lib/auth";
-import { github } from "@/lib/github";
+import { getAuth, github, lucia } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { OAuth2RequestError } from "arctic";
-import { generateId } from "lucia";
+import { generateIdFromEntropySize } from "lucia";
 import { encrypt } from "@/lib/crypto";
 import { db } from "@/db";
 import { userTable, githubUserTokenTable } from "@/db/schema";
@@ -55,7 +54,7 @@ export async function GET(request: Request): Promise<Response> {
 			});
 		}
 
-		const userId = generateId(10); // 16 characters long
+		const userId = generateIdFromEntropySize(10); // 16 characters long
 
 		await db.insert(userTable).values({
 			id: userId,

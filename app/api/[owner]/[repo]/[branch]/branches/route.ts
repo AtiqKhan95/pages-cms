@@ -1,7 +1,6 @@
 import { createOctokitInstance } from "@/lib/utils/octokit";
 import { getAuth } from "@/lib/auth";
 import { getToken } from "@/lib/token";
-import type { TokenUser } from "@/lib/token";
 
 export async function POST(
   request: Request,
@@ -9,9 +8,9 @@ export async function POST(
 ) {
   try {
     const { user, session } = await getAuth();
-    if (!session || !user) return new Response(null, { status: 401 });
+    if (!session) return new Response(null, { status: 401 });
 
-    const token = await getToken(user as TokenUser, params.owner, params.repo);
+    const token = await getToken(user, params.owner, params.repo);
     if (!token) throw new Error("Token not found");
 
     const data: any = await request.json();

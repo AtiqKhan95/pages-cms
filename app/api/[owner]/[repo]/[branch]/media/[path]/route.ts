@@ -1,20 +1,18 @@
-import { type NextRequest } from "next/server";
 import { createOctokitInstance } from "@/lib/utils/octokit";
 import { getConfig } from "@/lib/utils/config";
 import { getFileExtension, normalizePath } from "@/lib/utils/file";
 import { getAuth } from "@/lib/auth";
 import { getToken } from "@/lib/token";
-import type { TokenUser } from "@/lib/token";
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { owner: string; repo: string; branch: string; path: string[] } }
+  request: Request,
+  { params }: { params: { owner: string, repo: string, branch: string, path: string } }
 ) {
   try {
     const { user, session } = await getAuth();
-    if (!session || !user) return new Response(null, { status: 401 });
+    if (!session) return new Response(null, { status: 401 });
 
-    const token = await getToken(user as TokenUser, params.owner, params.repo);
+    const token = await getToken(user, params.owner, params.repo);
     if (!token) throw new Error("Token not found");
 
     const config = await getConfig(params.owner, params.repo, params.branch);
@@ -22,8 +20,8 @@ export async function GET(
     
     if (!config.object.media) throw new Error(`No media configuration found for ${params.owner}/${params.repo}/${params.branch}.`);
 
-    const normalizedPath = normalizePath(params.path.join("/"));
-    if (!normalizedPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${params.path.join("/")}" for media.`);
+    const normalizedPath = normalizePath(params.path);
+    if (!normalizedPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${params.path}" for media.`);
 
     const octokit = createOctokitInstance(token);
     const response = await octokit.rest.repos.getContent({
