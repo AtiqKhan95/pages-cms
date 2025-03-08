@@ -1,12 +1,6 @@
-'use client';
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useConfig } from "@/contexts/config-context";
-import { RepoProvider } from "@/contexts/repo-context";
 import { getRepo } from "@/lib/repo";
 import { Message } from "@/components/message";
-import { Repo } from "@/types/repo";
+import { RepoProvider } from "@/components/providers/repo-provider";
 
 export default async function RepoLayout({
   children,
@@ -34,6 +28,7 @@ export default async function RepoLayout({
       owner={repoInfo.owner} 
       repo={repoInfo.repo} 
       defaultBranch={repoInfo.defaultBranch}
+      branches={repoInfo.branches}
     >
       {children}
     </RepoProvider>

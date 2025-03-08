@@ -1,21 +1,17 @@
 import { redirect } from "next/navigation";
-import { createOctokitInstance } from "@/lib/utils/octokit";
-import { getAuth } from "@/lib/auth";
-import { getToken } from "@/lib/token";
+import { headers } from "next/headers";
+import { Octokit } from "@octokit/rest";
+import { getServerSession } from "next-auth";
 import { Repo } from "@/types/repo";
 
 export async function getRepo(owner: string, repo: string): Promise<Repo | null> {
-  const { session, user } = await getAuth();
-  if (!session) {
+  const session = await getServerSession();
+  if (!session?.accessToken) {
     redirect("/sign-in");
-    return null;
   }
 
-  const token = await getToken(user, owner, repo);
-  if (!token) throw new Error("Token not found");
-
   try {
-    const octokit = createOctokitInstance(token);
+    const octokit = new Octokit({ auth: session.accessToken });
     const repoResponse = await octokit.rest.repos.get({ owner, repo });
     
     let branches = [];
