@@ -92,7 +92,7 @@ export function RepoNav() {
       settingsItem,
       collaboratorsItem
     ].filter(Boolean);
-  }, [config]);
+  }, [config, user?.githubId]);
 
   if (!items.length) return null;
 
