@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { userTable, sessionTable } from "@/db/schema";
 import { GitHub } from "arctic";
 import { cookies } from "next/headers";
+import { getGitHubClient } from './github';
 
 // TODO: why do I have to cast sessions and users???
 const adapter = new DrizzleSQLiteAdapter(db, sessionTable as unknown as SQLiteSessionTable, userTable as unknown as SQLiteUserTable);
@@ -70,3 +71,13 @@ export const getAuth = cache(
 		return result;
 	}
 );
+
+export async function getSession() {
+	try {
+		const github = await getGitHubClient();
+		const { data } = await github.rest.users.getAuthenticated();
+		return { user: data };
+	} catch (error) {
+		return null;
+	}
+}
