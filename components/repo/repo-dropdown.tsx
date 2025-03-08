@@ -24,6 +24,7 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { ArrowUpRight, ChevronsUpDown } from "lucide-react";
+import Image from "next/image";
 
 export function RepoDropdown({
   onClick
@@ -64,7 +65,13 @@ export function RepoDropdown({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" className="w-full h-15 justify-start px-3">
-            <img className="h-10 w-10 rounded-lg" src={`https://github.com/${owner}.png`} alt="Picture of the author" />
+            <Image 
+              className="rounded-lg" 
+              src={`https://github.com/${owner}.png`} 
+              alt={`${owner}'s avatar`}
+              width={40}
+              height={40}
+            />
             <div className="text-left overflow-hidden ml-3">
               <div className="font-medium truncate">{repo}</div>
               <div className="text-xs text-muted-foreground truncate">{config?.branch}</div>

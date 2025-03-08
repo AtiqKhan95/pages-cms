@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGitHubClient } from "@/lib/github";
-import { getSession } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
 import { cookies } from "next/headers";
 
 export async function POST(
@@ -8,9 +8,9 @@ export async function POST(
   { params }: { params: { owner: string; repo: string; branch: string } }
 ) {
   try {
-    const session = await getSession();
-    if (!session?.user?.login) {
-      return NextResponse.json({ status: "error", message: "Unauthorized" }, { status: 401 });
+    const auth = await getAuth();
+    if (!auth.session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const github = await getGitHubClient();

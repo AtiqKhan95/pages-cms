@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ban, ChevronsUpDown, LockKeyhole, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 export function RepoSelect({
   onAccountSelect
@@ -113,7 +114,13 @@ export function RepoSelect({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="px-3">
-              <img className="h-6 w-6 rounded mr-2" src={`https://github.com/${selectedAccount?.login}.png`} alt={`${selectedAccount?.login}'s avatar`}/>
+              <Image 
+                className="rounded mr-2" 
+                src={`https://github.com/${selectedAccount?.login}.png`} 
+                alt={`${selectedAccount?.login}'s avatar`}
+                width={24}
+                height={24}
+              />
               <span className="mr-2">{selectedAccount?.login}</span>
               <ChevronsUpDown className="ml-auto h-4 w-4 opacity-50"/>
             </Button>
@@ -127,7 +134,13 @@ export function RepoSelect({
                   if (onAccountSelect) onAccountSelect(account);
                 }}
               >
-                <img className="h-6 w-6 rounded mr-2" src={`https://github.com/${account.login}.png`} alt={`${account.login}'s avatar`}/>
+                <Image 
+                  className="rounded mr-2" 
+                  src={`https://github.com/${account.login}.png`} 
+                  alt={`${account.login}'s avatar`}
+                  width={24}
+                  height={24}
+                />
                 {account.login}
               </DropdownMenuItem>
             ))}
