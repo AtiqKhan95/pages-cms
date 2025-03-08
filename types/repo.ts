@@ -3,7 +3,7 @@ export interface Repo {
   owner: string;
   ownerId: number;
   repo: string;
-  branches?: string[];
-  defaultBranch?: string;
+  defaultBranch: string;
+  branches: string[];
   isPrivate: boolean;
 };

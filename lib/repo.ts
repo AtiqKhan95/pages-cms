@@ -2,10 +2,15 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { Octokit } from "@octokit/rest";
 import { getServerSession } from "next-auth";
+import type { Session } from "next-auth";
 import { Repo } from "@/types/repo";
 
+interface CustomSession extends Session {
+  accessToken?: string;
+}
+
 export async function getRepo(owner: string, repo: string): Promise<Repo | null> {
-  const session = await getServerSession();
+  const session = await getServerSession() as CustomSession;
   if (!session?.accessToken) {
     redirect("/sign-in");
   }
@@ -28,8 +33,13 @@ export async function getRepo(owner: string, repo: string): Promise<Repo | null>
 
     const branchNames = branches.map(branch => branch.name);
     
+    // Always return at least the default branch if no branches are found
     if (branchNames.length === 0) {
-      return null;
+      if (repoResponse.data.default_branch) {
+        branchNames.push(repoResponse.data.default_branch);
+      } else {
+        return null;
+      }
     }
 
     return {
