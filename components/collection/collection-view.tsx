@@ -51,9 +51,6 @@ export function CollectionView({
   const { config } = useConfig();
   if (!config) throw new Error(`Configuration not found.`);
 
-  // Check if we're in a working branch
-  const isWorkingBranch = config.branch.startsWith("content-changes/");
-
   const schema = useMemo(() => getSchemaByName(config?.object, name), [config, name]);
   if (!schema) throw new Error(`Schema not found for "${name}".`);
   if (schema.type !== "collection") throw new Error(`"${name}" is not a collection.`);
@@ -177,28 +174,24 @@ export function CollectionView({
       header: "Actions",
       cell: ({ row }: { row: any }) => (
         <div className="flex gap-1">
-          {isWorkingBranch && (
-            <>
-              <Link
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8")}
-                href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${name}/edit/${encodeURIComponent(row.original.path)}`}
-              >
-                Edit
-              </Link>
-              <FileOptions path={row.original.path} sha={row.original.sha} type="collection" name={name} onDelete={handleDelete} onRename={handleRename}>
-                <Button variant="outline" size="icon-sm" className="h-8">
-                  <Ellipsis className="h-4 w-4" />
-                </Button>
-              </FileOptions>
-            </>
-          )}
+          <Link
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8")}
+            href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${name}/edit/${encodeURIComponent(row.original.path)}`}
+          >
+            Edit
+          </Link>
+          <FileOptions path={row.original.path} sha={row.original.sha} type="collection" name={name} onDelete={handleDelete} onRename={handleRename}>
+            <Button variant="outline" size="icon-sm" className="h-8">
+              <Ellipsis className="h-4 w-4" />
+            </Button>
+          </FileOptions>
         </div>
       ),
       enableSorting: false
     });
 
     return tableColumns;
-  }, [config.owner, config.repo, config.branch, name, viewFields, primaryField, handleDelete, handleRename, isWorkingBranch]);
+  }, [config.owner, config.repo, config.branch, name, viewFields, primaryField, handleDelete, handleRename]);
 
   const initialState = useMemo(() => {
     const sortId = viewFields == null
@@ -351,27 +344,23 @@ export function CollectionView({
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none"/>
             <Input className="h-9 pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          {isWorkingBranch && (
-            <>
-              <FolderCreate path={path || schema.path} type="content" name={name} onCreate={handleFolderCreate}>
-                <Button type="button" variant="outline" className="ml-auto shrink-0" size="icon-sm">
-                  <FolderPlus className="h-3.5 w-3.5"/>
-                </Button>
-              </FolderCreate>
-              <Link
-                className={cn(buttonVariants({size: "sm"}), "hidden sm:flex")}
-                href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new${path && path !== schema.path ? `?parent=${encodeURIComponent(path)}` : ""}`}
-              >
-                Add an entry
-              </Link>
-              <Link
-                className={cn(buttonVariants({size: "icon-sm"}), "sm:hidden shrink-0")}
-                href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new`}
-              >
-                <Plus className="h-4 w-4"/>
-              </Link>
-            </>
-          )}
+          <FolderCreate path={path || schema.path} type="content" name={name} onCreate={handleFolderCreate}>
+            <Button type="button" variant="outline" className="ml-auto shrink-0" size="icon-sm">
+              <FolderPlus className="h-3.5 w-3.5"/>
+            </Button>
+          </FolderCreate>
+          <Link
+            className={cn(buttonVariants({size: "sm"}), "hidden sm:flex")}
+            href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new${path && path !== schema.path ? `?parent=${encodeURIComponent(path)}` : ""}`}
+          >
+              Add an entry
+          </Link>
+          <Link
+            className={cn(buttonVariants({size: "icon-sm"}), "sm:hidden shrink-0")}
+            href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new`}
+          >
+              <Plus className="h-4 w-4"/>
+          </Link>
         </header>
         {isLoading
           ? loadingSkeleton

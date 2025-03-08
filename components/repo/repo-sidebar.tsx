@@ -32,7 +32,7 @@ const RepoSidebar = ({
         <RepoDropdown onClick={onClick} />
       </div>
       <nav className="px-3 flex flex-col gap-y-1 overflow-auto">
-        <RepoNav />
+        <RepoNav onClick={onClick}/>
       </nav>
       <footer className="flex items-center gap-x-2 border-t px-3 py-2 mt-auto">
         <User className="mr-auto" onClick={onClick}/>

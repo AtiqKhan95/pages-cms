@@ -32,15 +32,15 @@ import {
 } from "lucide-react";
 
 const MediaView = ({
-  path: initialPath,
-  onSelect,
+  initialPath,
+  initialSelected,
   maxSelected,
-  selected: initialSelected = [],
+  onSelect,
 }: {
-  path?: string;
-  onSelect?: (paths: string[]) => void;
-  maxSelected?: number;
-  selected?: string[];
+  initialPath?: string,
+  initialSelected?: string[],
+  maxSelected?: number,
+  onSelect?: (newSelected: string[]) => void
 }) => {
   const { config } = useConfig();
   if (!config) throw new Error(`Configuration not found.`);
@@ -52,14 +52,18 @@ const MediaView = ({
   const filesGridRef = useRef<HTMLDivElement | null>(null);
 
   const [error, setError] = useState<string | null | undefined>(null);
-  const [selected, setSelected] = useState<string[]>(initialSelected);
-  const [currentPath, setCurrentPath] = useState<string>(initialPath || "");
+  const [selected, setSelected] = useState(initialSelected || []);
+  const [path, setPath] = useState(() => {
+    if (!config.object.media) return "";
+    if (!initialPath) return config.object.media.input;
+    const normalizedInitialPath = normalizePath(initialPath);
+    if (normalizedInitialPath.startsWith(config.object.media.input)) return normalizedInitialPath;
+    console.warn(`"${initialPath}" is not within media root "${config.object.media.input}". Defaulting to media root.`);
+    return config.object.media.input;
+  });
   const [data, setData] = useState<Record<string, any>[] | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Check if we're in a working branch
-  const isWorkingBranch = config.branch.startsWith("content-changes/");
-
   useEffect(() => {
     async function fetchMedia() {
       if (config) {
@@ -67,7 +71,7 @@ const MediaView = ({
         setError(null);
 
         try {
-          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${encodeURIComponent(currentPath)}`);
+          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${encodeURIComponent(path)}`);
           if (!response.ok) throw new Error(`Failed to fetch media: ${response.status} ${response.statusText}`);
 
           const data: any = await response.json();
@@ -85,7 +89,7 @@ const MediaView = ({
     }
     fetchMedia();
     
-  }, [config, currentPath]);
+  }, [config, path]);
 
   const handleUpload = useCallback((entry: any) => {
     setData((prevData) => {
@@ -128,7 +132,7 @@ const MediaView = ({
   }, []);
 
   const handleNavigate = (newPath: string) => {
-    setCurrentPath(newPath);
+    setPath(newPath);
     if (!onSelect) {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
       params.set("path", newPath || config?.object.media.input);
@@ -137,8 +141,8 @@ const MediaView = ({
   }
 
   const handleNavigateParent = () => {
-    if (!currentPath || currentPath === config.object.media.input) return;
-    handleNavigate(getParentPath(currentPath));
+    if (!path || path === config.object.media.input) return;
+    handleNavigate(getParentPath(path));
   }
 
   const handleSelect = useCallback((path: string) => {
@@ -204,7 +208,7 @@ const MediaView = ({
 
   if (error) {
     // TODO: should we use a custom error class with code?
-    if (currentPath === config.object.media.input && error === "Not found") {
+    if (path === config.object.media.input && error === "Not found") {
       return (
         <Message
             title="Media folder missing"
@@ -231,26 +235,22 @@ const MediaView = ({
     <div className="flex-1 flex flex-col space-y-4">
       <header className="flex items-center gap-x-2">
         <div className="sm:flex-1">
-          <PathBreadcrumb path={currentPath} rootPath={config.object.media.input} handleNavigate={handleNavigate} className="hidden sm:block"/>
-          <Button onClick={handleNavigateParent} size="icon-sm" variant="outline" className="shrink-0 sm:hidden" disabled={!currentPath || currentPath === config.object.media.input}>
+          <PathBreadcrumb path={path} rootPath={config.object.media.input} handleNavigate={handleNavigate} className="hidden sm:block"/>
+          <Button onClick={handleNavigateParent} size="icon-sm" variant="outline" className="shrink-0 sm:hidden" disabled={!path || path === config.object.media.input}>
             <CornerLeftUp className="w-4 h-4"/>
           </Button>
         </div>
-        {isWorkingBranch && (
-          <>
-            <FolderCreate path={currentPath} type="media" onCreate={handleFolderCreate}>
-              <Button type="button" variant="outline" className="ml-auto" size="icon-sm">
-                <FolderPlus className="h-3.5 w-3.5"/>
-              </Button>
-            </FolderCreate>
-            <MediaUpload path={currentPath} onUpload={handleUpload}>
-              <Button type="button" size="sm" className="gap-2">
-                <Upload className="h-3.5 w-3.5"/>
-                Upload
-              </Button>
-            </MediaUpload>
-          </>
-        )}
+        <FolderCreate path={path} type="media" onCreate={handleFolderCreate}>
+          <Button type="button" variant="outline" className="ml-auto" size="icon-sm">
+            <FolderPlus className="h-3.5 w-3.5"/>
+          </Button>
+        </FolderCreate>
+        <MediaUpload path={path} onUpload={handleUpload}>
+          <Button type="button" size="sm" className="gap-2">
+            <Upload className="h-3.5 w-3.5"/>
+            Upload
+          </Button>
+        </MediaUpload>
       </header>
       <div className="relative flex-1 overflow-auto scrollbar" ref={filesGridRef}>
         {isLoading
@@ -295,13 +295,11 @@ const MediaView = ({
                                   <div className="text-sm font-medium truncate">{item.name}</div>
                                   <div className="text-xs text-muted-foreground truncate">{getFileSize(item.size)}</div>
                                 </div>
-                                {isWorkingBranch && (
-                                  <FileOptions path={item.path} sha={item.sha} type="media" onDelete={handleDelete} onRename={handleRename} portalProps={{container: filesGridRef.current}}>
-                                    <Button variant="ghost" size="icon" className="shrink-0">
-                                      <EllipsisVertical className="h-4 w-4" />
-                                    </Button>
-                                  </FileOptions>
-                                )}
+                                <FileOptions path={item.path} sha={item.sha} type="media" onDelete={handleDelete} onRename={handleRename} portalProps={{container: filesGridRef.current}}>
+                                  <Button variant="ghost" size="icon" className="shrink-0">
+                                    <EllipsisVertical className="h-4 w-4" />
+                                  </Button>
+                                </FileOptions>
                               </div>
                               {onSelect && selected.includes(item.path) &&
                                 <div className="text-primary-foreground bg-primary p-0.5 rounded-full absolute top-2 left-2">

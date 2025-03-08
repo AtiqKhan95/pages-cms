@@ -50,9 +50,6 @@ export function EntryEditor({
   const { config } = useConfig();
   if (!config) throw new Error(`Configuration not found.`);
   
-  // Check if we're in a working branch
-  const isWorkingBranch = config.branch.startsWith("content-changes/");
-
   let schema = useMemo(() => {
     if (!name) return;
     return getSchemaByName(config?.object, name)
@@ -357,8 +354,7 @@ export function EntryEditor({
         onSubmit={onSubmit}
         path={path}
         history={history}
-        isWorkingBranch={isWorkingBranch}
-        options={path && sha && isWorkingBranch &&
+        options={path && sha &&
           <FileOptions
             path={path}
             sha={sha}

@@ -242,42 +242,40 @@ const EntryForm = ({
   navigateBack,
   fields,
   contentObject,
-  onSubmit,
-  path,
+  onSubmit = (values) => console.log(values),
   history,
+  path,
   options,
-  isWorkingBranch = true,
 }: {
   title: string;
   navigateBack?: string;
   fields: Field[];
   contentObject?: any;
   onSubmit: (values: any) => void;
-  path?: string;
   history?: Record<string, any>[];
-  options?: React.ReactNode;
-  isWorkingBranch?: boolean;
+  path?: string;
+  options: React.ReactNode;
 }) => {
-  const form = useForm({
-    resolver: zodResolver(generateZodSchema(fields)),
-    defaultValues: contentObject || initializeState(fields, {}),
-  });
-
-  const { isDirty } = useFormState({ control: form.control });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (values: any) => {
-    if (!isWorkingBranch) return;
-    setIsSubmitting(true);
-    try {
-      await onSubmit(sanitizeObject(values));
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const zodSchema = useMemo(() => {
+    return generateZodSchema(fields, true);
+  }, [fields]);
 
+  const defaultValues = useMemo(() => {
+    return initializeState(fields, sanitizeObject(contentObject), true);
+  }, [fields, contentObject]);
+
+  const form = useForm({
+    resolver: zodSchema && zodResolver(zodSchema),
+    defaultValues,
+  });
+
+  const { isDirty } = useFormState({
+    control: form.control
+  });
+
+  // TODO: investigate why this run on every input focus
   const renderFields = (fields: Field[], parentName?: string) => {
     return fields.map((field) => {
       if (field.hidden) return null;
@@ -306,6 +304,15 @@ const EntryForm = ({
     });
   };
 
+  const handleSubmit = async (values: any) => {
+    setIsSubmitting(true);
+    try {
+      await onSubmit(values);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)}>
@@ -331,38 +338,22 @@ const EntryForm = ({
           <div className="hidden lg:block w-64">
             <div className="flex flex-col gap-y-4 sticky top-0">
               <div className="flex gap-x-2">
-                {isWorkingBranch ? (
-                  <>
-                    <Button type="submit" className="w-full" disabled={isSubmitting || !isDirty}>
-                      Save
-                      {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
-                    </Button>
-                    {options ? options : null}
-                  </>
-                ) : (
-                  <Button type="button" className="w-full" disabled>
-                    Create a working branch to make changes
-                  </Button>
-                )}
+                <Button type="submit" className="w-full" disabled={isSubmitting || !isDirty}>
+                  Save
+                  {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
+                </Button>
+                {options ? options : null}
               </div>
               {path && history && <EntryHistoryBlock history={history} path={path}/>}
             </div>
           </div>
           <div className="lg:hidden fixed top-0 right-0 h-14 flex items-center gap-x-2 z-10 pr-4 md:pr-6">
             {path && history && <EntryHistoryDropdown history={history} path={path}/>}
-            {isWorkingBranch ? (
-              <>
-                <Button type="submit" disabled={isSubmitting}>
-                  Save
-                  {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
-                </Button>
-                {options ? options : null}
-              </>
-            ) : (
-              <Button type="button" disabled>
-                Create branch
-              </Button>
-            )}
+            <Button type="submit" disabled={isSubmitting}>
+              Save
+              {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
+            </Button>
+            {options ? options : null}
           </div>
         </div>
       </form>
