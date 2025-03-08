@@ -7,6 +7,10 @@ import { useConfig } from "@/contexts/config-context";
 import { useUser } from "@/contexts/user-context";
 import { cn } from "@/lib/utils";
 import { FileStack, FileText, Image as ImageIcon, Settings, Users } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 const RepoNavItem = ({
   children,
@@ -34,14 +38,13 @@ const RepoNavItem = ({
   </Link>
 );
 
-const RepoNav = ({
-  onClick
-}: {
-  onClick?: () => void;
-}) => {
+export function RepoNav() {
   const { config } = useConfig();
   const { user } = useUser();
   const pathname = usePathname();
+  const router = useRouter();
+
+  const isWorkingBranch = config?.branch.startsWith("content-changes/");
 
   const items = useMemo(() => {
     if (!config || !config.object) return [];
@@ -94,20 +97,37 @@ const RepoNav = ({
   if (!items.length) return null;
 
   return (
-    <>
+    <nav className="flex items-center gap-x-2">
+      {isWorkingBranch && items.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              Add an entry
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {items.map((item) => (
+              <DropdownMenuItem
+                key={item.key}
+                onClick={() => router.push(item.href)}
+              >
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       {items.map(item => (
         <RepoNavItem
           key={item.key}
           icon={item.icon}
           href={item.href}
           active={pathname === item.href || pathname.startsWith(`${item.href}/`)}
-          onClick={onClick}
         >
           {item.label}
         </RepoNavItem>
       ))}
-    </>
+    </nav>
   );
 }
-
-export { RepoNav };

@@ -31,6 +31,8 @@ export function WorkingBranchControls(): React.ReactElement | null {
   const { user } = useUser();
   const [isCreatingBranch, setIsCreatingBranch] = React.useState(false);
   const [isCreatingPR, setIsCreatingPR] = React.useState(false);
+  const [showBranchDialog, setShowBranchDialog] = React.useState(false);
+  const [branchName, setBranchName] = React.useState("");
   const [prTitle, setPrTitle] = React.useState("");
   const [prDescription, setPrDescription] = React.useState("");
   const [targetBranch, setTargetBranch] = React.useState(defaultBranch || "");
@@ -40,18 +42,22 @@ export function WorkingBranchControls(): React.ReactElement | null {
   }
 
   const handleCreateWorkingBranch = async () => {
+    if (!branchName.trim()) {
+      toast.error("Branch name is required");
+      return;
+    }
+
     setIsCreatingBranch(true);
     try {
-      // Generate a unique branch name with username
-      const timestamp = new Date().getTime();
       const username = user?.githubUsername?.toLowerCase() || 'unknown';
-      const branchName = `content-changes/${username}/${timestamp}`;
+      const timestamp = new Date().getTime();
+      const fullBranchName = `content-changes/${username}/${branchName}-${timestamp}`;
 
       const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/branches`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: branchName,
+          name: fullBranchName,
         }),
       });
 
@@ -60,8 +66,10 @@ export function WorkingBranchControls(): React.ReactElement | null {
       if (data.status !== "success") throw new Error(data.message);
 
       // Navigate to the new branch
-      router.push(`/${owner}/${repo}/${encodeURIComponent(branchName)}`);
+      router.push(`/${owner}/${repo}/${encodeURIComponent(fullBranchName)}`);
       toast.success("Created new working branch");
+      setShowBranchDialog(false);
+      setBranchName("");
     } catch (error: any) {
       console.error(error);
       toast.error(error.message);
@@ -103,12 +111,38 @@ export function WorkingBranchControls(): React.ReactElement | null {
   return (
     <div className="flex items-center gap-x-2">
       {!isWorkingBranch ? (
-        <Button 
-          onClick={handleCreateWorkingBranch}
-          disabled={isCreatingBranch}
-        >
-          Add/edit content
-        </Button>
+        <>
+          <Dialog open={showBranchDialog} onOpenChange={setShowBranchDialog}>
+            <DialogTrigger asChild>
+              <Button>Add/edit content</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Working Branch</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="branch-name">Branch Name</label>
+                  <Input
+                    id="branch-name"
+                    value={branchName}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBranchName(e.target.value)}
+                    placeholder="e.g., update-blog-post"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Final branch name will be: content-changes/{user?.githubUsername?.toLowerCase() || 'unknown'}/{branchName}-timestamp
+                  </p>
+                </div>
+                <Button
+                  onClick={handleCreateWorkingBranch}
+                  disabled={isCreatingBranch || !branchName.trim()}
+                >
+                  Create Branch
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
       ) : (
         <Dialog>
           <DialogTrigger asChild>
