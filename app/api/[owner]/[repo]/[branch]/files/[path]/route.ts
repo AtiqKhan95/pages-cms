@@ -224,16 +224,17 @@ const githubSaveFile = async (
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { owner: string, repo: string, branch: string, path: string } }
+  { params }: { params: { owner: string; repo: string; branch: string; path: string[] } }
 ) {
   try {
     const { user, session } = await getAuth();
-    if (!session) return new Response(null, { status: 401 });
+    if (!session || !user) return new Response(null, { status: 401 });
 
-    const token = await getToken(user, params.owner, params.repo);
+    const token = await getToken(user as TokenUser, params.owner, params.repo);
     if (!token) throw new Error("Token not found");
 
-    if (params.path === ".pages.yml") throw new Error(`Deleting the settings file isn't allowed.`);
+    const normalizedPath = normalizePath(params.path.join("/"));
+    if (normalizedPath === ".pages.yml") throw new Error(`Deleting the settings file isn't allowed.`);
 
     const searchParams = request.nextUrl.searchParams;
     const sha = searchParams.get("sha");
@@ -246,8 +247,6 @@ export async function DELETE(
 
     const config = await getConfig(params.owner, params.repo, params.branch);
     if (!config) throw new Error(`Configuration not found for ${params.owner}/${params.repo}/${params.branch}.`);
-
-    const normalizedPath = normalizePath(params.path);
     
     switch (type) {
       case "content":
@@ -256,13 +255,13 @@ export async function DELETE(
         const schema = getSchemaByName(config.object, name);
         if (!schema) throw new Error(`Schema not found for ${name}.`);
         
-        if (!normalizedPath.startsWith(schema.path)) throw new Error(`Invalid path "${params.path}" for ${type} "${name}".`);
+        if (!normalizedPath.startsWith(schema.path)) throw new Error(`Invalid path "${params.path.join("/")}" for ${type} "${name}".`);
         
         if (getFileExtension(normalizedPath) !== schema.extension) throw new Error(`Invalid extension "${getFileExtension(normalizedPath)}" for ${type} "${name}".`);
         break;
       case "media":
         if (!config.object.media) throw new Error(`No media configuration found for ${params.owner}/${params.repo}/${params.branch}.`);
-        if (!normalizedPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${params.path}" for media.`);
+        if (!normalizedPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${params.path.join("/")}" for media.`);
 
         if (
           config.object.media.extensions?.length > 0 &&
@@ -276,9 +275,9 @@ export async function DELETE(
       owner: params.owner,
       repo: params.repo,
       branch: params.branch,
-      path: params.path,
+      path: normalizedPath,
       sha: sha,
-      message: `Delete ${params.path} (via Pages CMS)`,
+      message: `Delete ${normalizedPath} (via Pages CMS)`,
     });
 
     return Response.json({

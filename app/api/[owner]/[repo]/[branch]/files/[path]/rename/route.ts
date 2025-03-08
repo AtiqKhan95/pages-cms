@@ -17,7 +17,8 @@ export async function POST(
     const token = await getToken(user as TokenUser, params.owner, params.repo);
     if (!token) throw new Error("Token not found");
 
-    if (params.path === ".pages.yml") throw new Error(`Renaming the settings file isn't allowed.`);
+    const normalizedPath = normalizePath(params.path.join("/"));
+    if (normalizedPath === ".pages.yml") throw new Error(`Renaming the settings file isn't allowed.`);
 
     const config = await getConfig(params.owner, params.repo, params.branch);
     if (!config) throw new Error(`Configuration not found for ${params.owner}/${params.repo}/${params.branch}.`);
@@ -28,7 +29,6 @@ export async function POST(
     if (!data.name && data.type === "content") throw new Error(`"name" is required.`);
     if (!data.newPath) throw new Error(`"newPath" is required.`);
 
-    const normalizedPath = normalizePath(params.path);
     const normalizedNewPath = normalizePath(data.newPath);
     if (normalizedPath === normalizedNewPath) throw new Error(`New path "${data.newPath}" is the same as the old path.`);
 
@@ -41,7 +41,7 @@ export async function POST(
 
         if (schema.type === "file") throw new Error(`Renaming content of type "file" isn't allowed.`);
         
-        if (!normalizedPath.startsWith(schema.path)) throw new Error(`Invalid path "${params.path}" for ${data.type} "${data.name}".`);
+        if (!normalizedPath.startsWith(schema.path)) throw new Error(`Invalid path "${params.path.join("/")}" for ${data.type} "${data.name}".`);
         if (!normalizedNewPath.startsWith(schema.path)) throw new Error(`Invalid path "${data.newPath}" for ${data.type} "${data.name}".`);
 
         if (getFileExtension(normalizedPath) !== schema.extension) throw new Error(`Invalid extension "${getFileExtension(normalizedPath)}" for ${data.type} "${data.name}".`);
@@ -50,7 +50,7 @@ export async function POST(
       case "media":
         if (!config.object.media) throw new Error(`No media configuration found for ${params.owner}/${params.repo}/${params.branch}.`);
         
-        if (!normalizedPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${params.path}" for media.`);
+        if (!normalizedPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${params.path.join("/")}" for media.`);
         if (!normalizedNewPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${data.newPath}" for media.`);
         
         if (
