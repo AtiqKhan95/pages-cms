@@ -7,6 +7,7 @@ interface RepoContextType {
   repo: string;
   branches: string[];
   defaultBranch?: string;
+  isPrivate: boolean;
   setBranches: (branches: string[]) => void;
   syncBranch: (branch: string) => Promise<void>;
 }
@@ -18,12 +19,14 @@ export function RepoProvider({
   repo,
   defaultBranch,
   branches: initialBranches,
+  isPrivate,
   children,
 }: {
   owner: string;
   repo: string;
   defaultBranch?: string;
   branches: string[];
+  isPrivate: boolean;
   children: React.ReactNode;
 }) {
   const [branches, setBranches] = useState<string[]>(initialBranches);
@@ -50,7 +53,7 @@ export function RepoProvider({
   };
 
   return (
-    <RepoContext.Provider value={{ owner, repo, branches, defaultBranch, setBranches, syncBranch }}>
+    <RepoContext.Provider value={{ owner, repo, branches, defaultBranch, isPrivate, setBranches, syncBranch }}>
       {children}
     </RepoContext.Provider>
   );

@@ -29,6 +29,7 @@ export default async function RepoLayout({
       repo={repoInfo.repo} 
       defaultBranch={repoInfo.defaultBranch}
       branches={repoInfo.branches}
+      isPrivate={repoInfo.isPrivate}
     >
       {children}
     </RepoProvider>

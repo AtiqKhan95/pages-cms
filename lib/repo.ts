@@ -1,30 +1,18 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { Octokit } from "@octokit/rest";
-import { getServerSession } from "next-auth";
-import type { Session } from "next-auth";
+import { getGitHubClient } from "./github";
 import { Repo } from "@/types/repo";
 
-interface CustomSession extends Session {
-  accessToken?: string;
-}
-
 export async function getRepo(owner: string, repo: string): Promise<Repo | null> {
-  const session = await getServerSession() as CustomSession;
-  if (!session?.accessToken) {
-    redirect("/sign-in");
-  }
-
   try {
-    const octokit = new Octokit({ auth: session.accessToken });
-    const repoResponse = await octokit.rest.repos.get({ owner, repo });
+    const github = await getGitHubClient();
+    const repoResponse = await github.rest.repos.get({ owner, repo });
     
     let branches = [];
     let hasMore = true;
     let page = 1;
 
     while (hasMore) {
-      const branchesResponse = await octokit.rest.repos.listBranches({ owner, repo, page: page, per_page: 100 });
+      const branchesResponse = await github.rest.repos.listBranches({ owner, repo, page: page, per_page: 100 });
       if (branchesResponse.data.length === 0) break;
       branches.push(...branchesResponse.data);
       hasMore = (branchesResponse.data.length === 100);
@@ -52,6 +40,9 @@ export async function getRepo(owner: string, repo: string): Promise<Repo | null>
       isPrivate: repoResponse.data.private
     };
   } catch (error: any) {
+    if (error.message === "No session found") {
+      redirect("/sign-in");
+    }
     if (error.status === 404 || error.status === 403) {
       return null;
     }
