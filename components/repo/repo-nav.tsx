@@ -44,7 +44,7 @@ export function RepoNav() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const isWorkingBranch = config?.branch.startsWith("content-changes/");
+  const isWorkingBranch = config?.branch?.startsWith("content-changes/");
 
   const items = useMemo(() => {
     if (!config || !config.object) return [];
@@ -98,7 +98,7 @@ export function RepoNav() {
 
   return (
     <nav className="flex items-center gap-x-2">
-      {isWorkingBranch && items.length > 0 && (
+      {isWorkingBranch && items.some(item => item.key !== "settings" && item.key !== "collaborators") && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
@@ -107,14 +107,16 @@ export function RepoNav() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {items.map((item) => (
-              <DropdownMenuItem
-                key={item.key}
-                onClick={() => router.push(item.href)}
-              >
-                {item.label}
-              </DropdownMenuItem>
-            ))}
+            {items
+              .filter(item => item.key !== "settings" && item.key !== "collaborators")
+              .map((item) => (
+                <DropdownMenuItem
+                  key={item.key}
+                  onClick={() => router.push(item.href)}
+                >
+                  {item.label}
+                </DropdownMenuItem>
+              ))}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

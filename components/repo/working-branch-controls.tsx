@@ -51,7 +51,15 @@ export function WorkingBranchControls(): React.ReactElement | null {
     try {
       const username = user?.githubUsername?.toLowerCase() || 'unknown';
       const timestamp = new Date().getTime();
-      const fullBranchName = `content-changes/${username}/${branchName}-${timestamp}`;
+      // Sanitize branch name: replace spaces with hyphens, remove special characters
+      const sanitizedBranchName = branchName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-') // Replace any non-alphanumeric chars with hyphens
+        .replace(/-+/g, '-') // Replace multiple consecutive hyphens with a single one
+        .replace(/^-|-$/g, ''); // Remove leading and trailing hyphens
+
+      const fullBranchName = `content-changes/${username}/${sanitizedBranchName}-${timestamp}`;
 
       const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/branches`, {
         method: "POST",
@@ -130,7 +138,8 @@ export function WorkingBranchControls(): React.ReactElement | null {
                     placeholder="e.g., update-blog-post"
                   />
                   <p className="text-sm text-muted-foreground">
-                    Final branch name will be: content-changes/{user?.githubUsername?.toLowerCase() || 'unknown'}/{branchName}-timestamp
+                    Final branch name will be sanitized (spaces and special characters replaced with hyphens) and formatted as:<br />
+                    content-changes/{user?.githubUsername?.toLowerCase() || 'unknown'}/{branchName ? branchName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') : 'branch-name'}-timestamp
                   </p>
                 </div>
                 <Button
