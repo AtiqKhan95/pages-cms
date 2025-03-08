@@ -1,0 +1,81 @@
+# Cline Rules for Pages CMS
+
+## Project Structure
+
+- The project follows a Next.js App Router structure
+- API routes are organized under `app/api/`
+- Components are organized by functionality in the `components/` directory
+- Database schema and migrations are in the `db/` directory
+- Field types are defined in the `fields/` directory
+- Utility functions and core logic are in the `lib/` directory
+- Types are defined in the `types/` directory
+
+## Coding Patterns
+
+- React Server Components are used where possible
+- Client components are marked with "use client" directive
+- Server Actions are used for data mutations
+- Context providers are used for global state
+- Tailwind CSS is used for styling
+- shadcn/ui components are used for UI elements
+- Zod is used for validation
+- Drizzle ORM is used for database access
+
+## GitHub Integration
+
+- GitHub API is accessed through Octokit
+- GitHub tokens are encrypted in the database
+- GitHub App is used for authentication and repository access
+- Webhooks are used for real-time updates
+
+## Configuration
+
+- `.pages.yml` is the main configuration file for repositories
+- Configuration is validated using Zod schemas
+- Configuration defines content types, fields, and media settings
+
+## Field System
+
+- Fields are registered in a central registry
+- Each field type has edit and view components
+- Fields can be customized with options
+- Fields can be nested (object fields can contain other fields)
+- Fields can be used in lists
+
+## Content Formats
+
+- Content can be stored in various formats:
+  - Markdown with frontmatter (YAML, JSON, TOML)
+  - Pure data files (YAML, JSON, TOML)
+  - Raw text files
+- Frontmatter is delimited by `---` for YAML, `+++` for TOML, or JSON blocks
+
+## Authentication
+
+- Authentication is handled by Lucia Auth
+- GitHub OAuth is the primary authentication method
+- Email-based authentication is available as an alternative
+- Sessions are stored in the database
+
+## Collaboration
+
+- Collaborators can be invited by email
+- Collaborators can have different permission levels
+- Collaborators are associated with specific repositories or installations
+
+## Error Handling
+
+- Client-side errors are displayed with toast notifications
+- Server-side errors are logged and returned as JSON responses
+- Form validation errors are displayed inline
+
+## Testing
+
+- No specific testing patterns identified yet
+- This section will be updated as testing patterns are discovered
+
+## Deployment
+
+- The application is designed to be deployed on Vercel
+- Database can be hosted on Turso
+- Environment variables are required for configuration
