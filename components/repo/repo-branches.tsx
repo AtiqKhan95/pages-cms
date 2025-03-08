@@ -82,7 +82,7 @@ export function RepoBranches() {
         <Button
           disabled={!search || !isValidBranchName(search) || branches.includes(search) || isSubmitting}
           onClick={handleCreateBranch}>
-          Create
+          Make Changes
           {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
         </Button>
       </header>

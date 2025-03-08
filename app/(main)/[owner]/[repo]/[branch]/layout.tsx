@@ -5,6 +5,7 @@ import { getToken } from "@/lib/token";
 import { configVersion, parseConfig, normalizeConfig } from "@/lib/config";
 import { getConfig, saveConfig, updateConfig } from "@/lib/utils/config";
 import { ConfigProvider } from "@/contexts/config-context";
+import { BranchEditProvider } from "@/contexts/branch-edit-context";
 import { RepoLayout } from "@/components/repo/repo-layout";
 import { EmptyCreate } from "@/components/empty-create";
 import { Message } from "@/components/message";
@@ -107,8 +108,10 @@ export default async function Layout({
 
   return (
     <ConfigProvider value={config}>
-      <Tracker owner={owner} repo={repo} branch={branch} />
-      <RepoLayout>{errorMessage ? errorMessage : children}</RepoLayout>
+      <BranchEditProvider>
+        <Tracker owner={owner} repo={repo} branch={branch} />
+        <RepoLayout>{errorMessage ? errorMessage : children}</RepoLayout>
+      </BranchEditProvider>
     </ConfigProvider>
   );
 }

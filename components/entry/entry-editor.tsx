@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useConfig } from "@/contexts/config-context";
+import { useBranchEdit } from "@/contexts/branch-edit-context";
 import { parseAndValidateConfig } from "@/lib/config"; 
 import { generateFilename, getPrimaryField, getSchemaByName } from "@/lib/schema";
 import {
@@ -48,6 +49,7 @@ export function EntryEditor({
   const router = useRouter();
   
   const { config } = useConfig();
+  const { canEdit, setPendingChanges } = useBranchEdit();
   if (!config) throw new Error(`Configuration not found.`);
   
   let schema = useMemo(() => {
@@ -153,6 +155,13 @@ export function EntryEditor({
 
     fetchHistory();
   }, [config.branch, config.owner, config.repo, path, sha, refetchTrigger, name]);
+
+  // Update pending changes state when form is submitted
+  useEffect(() => {
+    if (sha) {
+      setPendingChanges(true);
+    }
+  }, [sha, setPendingChanges]);
 
   const onSubmit = async (contentObject: any) => {
     const savePromise = new Promise(async (resolve, reject) => {
@@ -317,6 +326,18 @@ export function EntryEditor({
   ), [displayTitle, navigateBack, path]);
 
   
+  if (!canEdit && path !== ".pages.yml") {
+    return (
+      <Message
+        title="Branch editing restricted"
+        description="You need to create your own branch before you can edit content. Click 'Make Changes' in the branch dropdown to create a new branch."
+        className="absolute inset-0"
+        cta="Go to branch selection"
+        href={`/${config.owner}/${config.repo}`}
+      />
+    );
+  }
+
   if (error) {
     // TODO: should we use a custom error class with code?
     // TODO: errors show no header (unlike collection and media). Consider standardizing templates.

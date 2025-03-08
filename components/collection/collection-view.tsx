@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useConfig } from "@/contexts/config-context";
+import { useBranchEdit } from "@/contexts/branch-edit-context";
 import {
   getParentPath,
   getFileName,
@@ -49,6 +50,7 @@ export function CollectionView({
   const router = useRouter();
 
   const { config } = useConfig();
+  const { canEdit } = useBranchEdit();
   if (!config) throw new Error(`Configuration not found.`);
 
   const schema = useMemo(() => getSchemaByName(config?.object, name), [config, name]);
@@ -180,18 +182,20 @@ export function CollectionView({
           >
             Edit
           </Link>
-          <FileOptions path={row.original.path} sha={row.original.sha} type="collection" name={name} onDelete={handleDelete} onRename={handleRename}>
-            <Button variant="outline" size="icon-sm" className="h-8">
-              <Ellipsis className="h-4 w-4" />
-            </Button>
-          </FileOptions>
+          {canEdit && (
+            <FileOptions path={row.original.path} sha={row.original.sha} type="collection" name={name} onDelete={handleDelete} onRename={handleRename}>
+              <Button variant="outline" size="icon-sm" className="h-8">
+                <Ellipsis className="h-4 w-4" />
+              </Button>
+            </FileOptions>
+          )}
         </div>
       ),
       enableSorting: false
     });
 
     return tableColumns;
-  }, [config.owner, config.repo, config.branch, name, viewFields, primaryField, handleDelete, handleRename]);
+  }, [config.owner, config.repo, config.branch, name, viewFields, primaryField, handleDelete, handleRename, canEdit]);
 
   const initialState = useMemo(() => {
     const sortId = viewFields == null
@@ -330,6 +334,18 @@ export function CollectionView({
     }
   }
 
+  if (!canEdit) {
+    return (
+      <Message
+        title="Branch editing restricted"
+        description="You need to create your own branch before you can edit content. Click 'Make Changes' in the branch dropdown to create a new branch."
+        className="absolute inset-0"
+        cta="Go to branch selection"
+        href={`/${config.owner}/${config.repo}`}
+      />
+    );
+  }
+
   return (
     <>
       <div className="flex-1 flex flex-col space-y-6">
@@ -344,23 +360,27 @@ export function CollectionView({
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none"/>
             <Input className="h-9 pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <FolderCreate path={path || schema.path} type="content" name={name} onCreate={handleFolderCreate}>
-            <Button type="button" variant="outline" className="ml-auto shrink-0" size="icon-sm">
-              <FolderPlus className="h-3.5 w-3.5"/>
-            </Button>
-          </FolderCreate>
-          <Link
-            className={cn(buttonVariants({size: "sm"}), "hidden sm:flex")}
-            href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new${path && path !== schema.path ? `?parent=${encodeURIComponent(path)}` : ""}`}
-          >
-              Add an entry
-          </Link>
-          <Link
-            className={cn(buttonVariants({size: "icon-sm"}), "sm:hidden shrink-0")}
-            href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new`}
-          >
-              <Plus className="h-4 w-4"/>
-          </Link>
+          {canEdit && (
+            <>
+              <FolderCreate path={path || schema.path} type="content" name={name} onCreate={handleFolderCreate}>
+                <Button type="button" variant="outline" className="ml-auto shrink-0" size="icon-sm">
+                  <FolderPlus className="h-3.5 w-3.5"/>
+                </Button>
+              </FolderCreate>
+              <Link
+                className={cn(buttonVariants({size: "sm"}), "hidden sm:flex")}
+                href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new${path && path !== schema.path ? `?parent=${encodeURIComponent(path)}` : ""}`}
+              >
+                  Add an entry
+              </Link>
+              <Link
+                className={cn(buttonVariants({size: "icon-sm"}), "sm:hidden shrink-0")}
+                href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new`}
+              >
+                  <Plus className="h-4 w-4"/>
+              </Link>
+            </>
+          )}
         </header>
         {isLoading
           ? loadingSkeleton
