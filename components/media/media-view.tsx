@@ -32,15 +32,15 @@ import {
 } from "lucide-react";
 
 const MediaView = ({
-  initialPath,
-  initialSelected,
-  maxSelected,
+  path: initialPath,
   onSelect,
+  maxSelected,
+  selected: initialSelected = [],
 }: {
-  initialPath?: string,
-  initialSelected?: string[],
-  maxSelected?: number,
-  onSelect?: (newSelected: string[]) => void
+  path?: string;
+  onSelect?: (paths: string[]) => void;
+  maxSelected?: number;
+  selected?: string[];
 }) => {
   const { config } = useConfig();
   if (!config) throw new Error(`Configuration not found.`);
@@ -52,18 +52,14 @@ const MediaView = ({
   const filesGridRef = useRef<HTMLDivElement | null>(null);
 
   const [error, setError] = useState<string | null | undefined>(null);
-  const [selected, setSelected] = useState(initialSelected || []);
-  const [path, setPath] = useState(() => {
-    if (!config.object.media) return "";
-    if (!initialPath) return config.object.media.input;
-    const normalizedInitialPath = normalizePath(initialPath);
-    if (normalizedInitialPath.startsWith(config.object.media.input)) return normalizedInitialPath;
-    console.warn(`"${initialPath}" is not within media root "${config.object.media.input}". Defaulting to media root.`);
-    return config.object.media.input;
-  });
+  const [selected, setSelected] = useState<string[]>(initialSelected);
+  const [path, setPath] = useState<string>(initialPath || "");
   const [data, setData] = useState<Record<string, any>[] | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Check if we're in a working branch
+  const isWorkingBranch = config.branch.startsWith("content-changes/");
+
   useEffect(() => {
     async function fetchMedia() {
       if (config) {
@@ -240,17 +236,21 @@ const MediaView = ({
             <CornerLeftUp className="w-4 h-4"/>
           </Button>
         </div>
-        <FolderCreate path={path} type="media" onCreate={handleFolderCreate}>
-          <Button type="button" variant="outline" className="ml-auto" size="icon-sm">
-            <FolderPlus className="h-3.5 w-3.5"/>
-          </Button>
-        </FolderCreate>
-        <MediaUpload path={path} onUpload={handleUpload}>
-          <Button type="button" size="sm" className="gap-2">
-            <Upload className="h-3.5 w-3.5"/>
-            Upload
-          </Button>
-        </MediaUpload>
+        {isWorkingBranch && (
+          <>
+            <FolderCreate path={path} type="media" onCreate={handleFolderCreate}>
+              <Button type="button" variant="outline" className="ml-auto" size="icon-sm">
+                <FolderPlus className="h-3.5 w-3.5"/>
+              </Button>
+            </FolderCreate>
+            <MediaUpload path={path} onUpload={handleUpload}>
+              <Button type="button" size="sm" className="gap-2">
+                <Upload className="h-3.5 w-3.5"/>
+                Upload
+              </Button>
+            </MediaUpload>
+          </>
+        )}
       </header>
       <div className="relative flex-1 overflow-auto scrollbar" ref={filesGridRef}>
         {isLoading
@@ -295,11 +295,13 @@ const MediaView = ({
                                   <div className="text-sm font-medium truncate">{item.name}</div>
                                   <div className="text-xs text-muted-foreground truncate">{getFileSize(item.size)}</div>
                                 </div>
-                                <FileOptions path={item.path} sha={item.sha} type="media" onDelete={handleDelete} onRename={handleRename} portalProps={{container: filesGridRef.current}}>
-                                  <Button variant="ghost" size="icon" className="shrink-0">
-                                    <EllipsisVertical className="h-4 w-4" />
-                                  </Button>
-                                </FileOptions>
+                                {isWorkingBranch && (
+                                  <FileOptions path={item.path} sha={item.sha} type="media" onDelete={handleDelete} onRename={handleRename} portalProps={{container: filesGridRef.current}}>
+                                    <Button variant="ghost" size="icon" className="shrink-0">
+                                      <EllipsisVertical className="h-4 w-4" />
+                                    </Button>
+                                  </FileOptions>
+                                )}
                               </div>
                               {onSelect && selected.includes(item.path) &&
                                 <div className="text-primary-foreground bg-primary p-0.5 rounded-full absolute top-2 left-2">

@@ -23,6 +23,9 @@ const EmptyCreate = ({
 
   const router = useRouter();
 
+  // Check if we're in a working branch
+  const isWorkingBranch = config.branch.startsWith("content-changes/");
+
   let path = "";
   let content: string | Record<string, any> = "";
   let toCreate = "";
@@ -62,6 +65,11 @@ const EmptyCreate = ({
   }
   
   const handleCreate = async () => {
+    if (!isWorkingBranch) {
+      toast.error("You must create a working branch before making changes.");
+      return;
+    }
+
     try {
       const createPromise = new Promise(async (resolve, reject) => {
         try {
