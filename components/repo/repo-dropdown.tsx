@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useConfig } from "@/contexts/config-context";
-import { useRepo } from "@/contexts/repo-context";
+import { useRepo } from "@/components/providers/repo-provider";
 import { RepoBranches } from "./repo-branches";
 import { Button } from "@/components/ui/button";
 import {

@@ -13,7 +13,7 @@ import TableRow from "@tiptap/extension-table-row";
 import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
 import { useConfig } from "@/contexts/config-context";
-import { useRepo } from "@/contexts/repo-context";
+import { useRepo } from "@/components/providers/repo-provider";
 import { getRawUrl, relativeToRawUrls } from "@/lib/githubImage";
 import { MediaDialog, MediaDialogHandle } from "@/components/media/media-dialog";
 import "./edit-component.css";

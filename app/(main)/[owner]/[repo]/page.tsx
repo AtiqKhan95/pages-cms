@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useRepo } from "@/contexts/repo-context";
+import { useRepo } from "@/components/providers/repo-provider";
 import { useUser } from "@/contexts/user-context";
 
 export default function Page() {

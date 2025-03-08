@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from "next/navigation";
 import { useConfig } from "@/contexts/config-context";
-import { useRepo } from "@/contexts/repo-context";
+import { useRepo } from "@/components/providers/repo-provider";
 import { useUser } from "@/contexts/user-context";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";

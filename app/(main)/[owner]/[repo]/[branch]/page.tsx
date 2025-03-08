@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfig } from "@/contexts/config-context";
 import { Message } from "@/components/message";
-import { useRepo } from '@/contexts/repo-context';
+import { useRepo } from "@/components/providers/repo-provider";
 import { RepoSidebar } from '@/components/repo/repo-sidebar';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
