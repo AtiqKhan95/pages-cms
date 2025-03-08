@@ -60,11 +60,13 @@ import { ChevronLeft, GripVertical, Loader, Plus, Trash2 } from "lucide-react";
 const SortableItem = ({
   id,
   type,
-  children
+  children,
+  readOnly = false,
 }: {
   id: string,
   type: string,
-  children: React.ReactNode
+  children: React.ReactNode,
+  readOnly?: boolean,
 }) => {
   const {
     attributes,
@@ -73,7 +75,7 @@ const SortableItem = ({
     setNodeRef,
     transform,
     transition,
-  } = useSortable({ id });
+  } = useSortable({ id, disabled: readOnly });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -82,9 +84,11 @@ const SortableItem = ({
 
   return (
     <div ref={setNodeRef} className={cn("bg-background flex gap-x-1 rounded-lg border items-center", type === "object" ? "px-2 py-4" : "px-1 py-2", isDragging ? "z-50" : "z-10" )} style={style}>
-      <Button type="button" variant="ghost" size="icon-sm" className="h-8 cursor-move" {...attributes} {...listeners}>
-        <GripVertical className="h-4 w-4"/>
-      </Button>
+      {!readOnly && (
+        <Button type="button" variant="ghost" size="icon-sm" className="h-8 cursor-move" {...attributes} {...listeners}>
+          <GripVertical className="h-4 w-4"/>
+        </Button>
+      )}
       {children}
     </div>
   );
@@ -95,11 +99,13 @@ const ListField = ({
   field,
   fieldName,
   renderFields,
+  readOnly = false,
 }: {
   control: Control;
   field: Field;
   fieldName: string;
-  renderFields: (fields: Field[], parentName?: string) => React.ReactNode;
+  renderFields: (fields: Field[], parentName?: string, readOnly?: boolean) => React.ReactNode;
+  readOnly?: boolean;
 }) => {
   const { fields: arrayFields, append, remove, move } = useFieldArray({
     control,
@@ -159,29 +165,32 @@ const ListField = ({
             <DndContext sensors={sensors} modifiers={modifiers} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={arrayFields.map(item => item.id)} strategy={verticalListSortingStrategy}>
                 {arrayFields.map((arrayField, index) => (
-                  <SortableItem key={arrayField.id} id={arrayField.id} type={field.type}>
+                  <SortableItem key={arrayField.id} id={arrayField.id} type={field.type} readOnly={readOnly}>
                     <div className="grid gap-6 flex-1">
                       {field.type === "object" && field.fields
-                        ? renderFields(field.fields, `${fieldName}.${index}`)
-                        : renderSingleField(field, `${fieldName}.${index}`, control, false)}
+                        ? renderFields(field.fields, `${fieldName}.${index}`, readOnly)
+                        : renderSingleField(field, `${fieldName}.${index}`, control, false, readOnly)}
                     </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button type="button" variant="ghost" size="icon-sm" className="h-8" onClick={() => remove(index)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Remove entry
-                      </TooltipContent>
-                    </Tooltip>
+                    {!readOnly && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button type="button" variant="ghost" size="icon-sm" className="h-8" onClick={() => remove(index)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Remove entry
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </SortableItem>
                 ))}
               </SortableContext>
             </DndContext>
-            {typeof field.list === "object" && field.list?.max && arrayFields.length >= field.list.max
+            {!readOnly && typeof field.list === "object" && field.list?.max && arrayFields.length >= field.list.max
               ? null
-              : <Button
+              : !readOnly && (
+                <Button
                   type="button"
                   variant="outline"
                   size="sm"
@@ -196,6 +205,7 @@ const ListField = ({
                   <Plus className="h-4 w-4" />
                   Add an entry
                 </Button>
+              )
             }
           </div>
           <FormMessage/>
@@ -209,7 +219,8 @@ const renderSingleField = (
   field: Field,
   fieldName: string,
   control: Control,
-  showLabel = true
+  showLabel = true,
+  readOnly = false
 ) => {
   const FieldComponent = editComponents?.[field.type] || editComponents["text"];
 
@@ -227,7 +238,9 @@ const renderSingleField = (
           }
           {field.required && <span className="ml-2 rounded-md bg-muted px-2 py-0.5 text-xs font-medium">Required</span>}
           <FormControl>
-            <FieldComponent {...fieldProps} field={field} />
+            <div className={readOnly ? "opacity-70 pointer-events-none" : ""}>
+              <FieldComponent {...fieldProps} field={field} />
+            </div>
           </FormControl>
           {field.description && <FormDescription>{field.description}</FormDescription>}
           <FormMessage/>
@@ -246,6 +259,7 @@ const EntryForm = ({
   history,
   path,
   options,
+  readOnly = false,
 }: {
   title: string;
   navigateBack?: string;
@@ -255,6 +269,7 @@ const EntryForm = ({
   history?: Record<string, any>[];
   path?: string;
   options: React.ReactNode;
+  readOnly?: boolean;
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -276,14 +291,14 @@ const EntryForm = ({
   });
 
   // TODO: investigate why this run on every input focus
-  const renderFields = (fields: Field[], parentName?: string) => {
+  const renderFields = (fields: Field[], parentName?: string, readOnly = false) => {
     return fields.map((field) => {
       if (field.hidden) return null;
       
       const fieldName = parentName ? `${parentName}.${field.name}` : field.name;
 
       if (field.type === "object" && field.list && !supportsList[field.type]) {
-        return <ListField key={fieldName} control={form.control} field={field} fieldName={fieldName} renderFields={renderFields} />;
+        return <ListField key={fieldName} control={form.control} field={field} fieldName={fieldName} renderFields={renderFields} readOnly={readOnly} />;
       } else if (field.type === "object") {
         return (
           <fieldset key={fieldName} className="grid gap-6 rounded-lg border p-4">
@@ -293,18 +308,20 @@ const EntryForm = ({
                 {field.required && <span className="ml-2 rounded-md bg-muted px-2 py-0.5 text-xs font-medium">Required</span>}
               </legend>
             }
-            {renderFields(field.fields || [], fieldName)}
+            {renderFields(field.fields || [], fieldName, readOnly)}
           </fieldset>
         );
       } else if (field.list && !supportsList[field.type]) {
-        return <ListField key={fieldName} control={form.control} field={field} fieldName={fieldName} renderFields={renderFields} />;
+        return <ListField key={fieldName} control={form.control} field={field} fieldName={fieldName} renderFields={renderFields} readOnly={readOnly} />;
       }
 
-      return renderSingleField(field, fieldName, form.control);
+      return renderSingleField(field, fieldName, form.control, true, readOnly);
     });
   };
 
   const handleSubmit = async (values: any) => {
+    if (readOnly) return;
+    
     setIsSubmitting(true);
     try {
       await onSubmit(values);
@@ -331,17 +348,19 @@ const EntryForm = ({
               <h1 className="font-semibold text-lg md:text-2xl truncate">{title}</h1>
             </header>
             <div onSubmit={form.handleSubmit(handleSubmit)} className="grid items-start gap-6">
-              {renderFields(fields)}
+              {renderFields(fields, undefined, readOnly)}
             </div>
           </div>
           
           <div className="hidden lg:block w-64">
             <div className="flex flex-col gap-y-4 sticky top-0">
               <div className="flex gap-x-2">
-                <Button type="submit" className="w-full" disabled={isSubmitting || !isDirty}>
-                  Save
-                  {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
-                </Button>
+                {!readOnly && (
+                  <Button type="submit" className="w-full" disabled={isSubmitting || !isDirty}>
+                    Save
+                    {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
+                  </Button>
+                )}
                 {options ? options : null}
               </div>
               {path && history && <EntryHistoryBlock history={history} path={path}/>}
@@ -349,10 +368,12 @@ const EntryForm = ({
           </div>
           <div className="lg:hidden fixed top-0 right-0 h-14 flex items-center gap-x-2 z-10 pr-4 md:pr-6">
             {path && history && <EntryHistoryDropdown history={history} path={path}/>}
-            <Button type="submit" disabled={isSubmitting}>
-              Save
-              {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
-            </Button>
+            {!readOnly && (
+              <Button type="submit" disabled={isSubmitting}>
+                Save
+                {isSubmitting && (<Loader className="ml-2 h-4 w-4 animate-spin" />)}
+              </Button>
+            )}
             {options ? options : null}
           </div>
         </div>

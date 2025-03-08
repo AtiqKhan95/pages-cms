@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useConfig } from "@/contexts/config-context";
 import { useBranchEdit } from "@/contexts/branch-edit-context";
+import { RepoMakeChangesButton } from "@/components/repo/repo-make-changes-button";
 import { parseAndValidateConfig } from "@/lib/config"; 
 import { generateFilename, getPrimaryField, getSchemaByName } from "@/lib/schema";
 import {
@@ -21,7 +22,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, EllipsisVertical, History } from "lucide-react";
+import { ChevronLeft, EllipsisVertical, GitBranch, History } from "lucide-react";
 
 export function EntryEditor({
   name = "",
@@ -49,7 +50,7 @@ export function EntryEditor({
   const router = useRouter();
   
   const { config } = useConfig();
-  const { canEdit, setPendingChanges } = useBranchEdit();
+  const { canEdit, readOnly, setPendingChanges } = useBranchEdit();
   if (!config) throw new Error(`Configuration not found.`);
   
   let schema = useMemo(() => {
@@ -325,18 +326,8 @@ export function EntryEditor({
     </div>
   ), [displayTitle, navigateBack, path]);
 
-  
-  if (!canEdit && path !== ".pages.yml") {
-    return (
-      <Message
-        title="Branch editing restricted"
-        description="You need to create your own branch before you can edit content. Click 'Make Changes' in the branch dropdown to create a new branch."
-        className="absolute inset-0"
-        cta="Go to branch selection"
-        href={`/${config.owner}/${config.repo}`}
-      />
-    );
-  }
+  // We'll determine if we're in read-only mode
+  const isReadOnly = !canEdit && path !== ".pages.yml";
 
   if (error) {
     // TODO: should we use a custom error class with code?
@@ -348,7 +339,7 @@ export function EntryEditor({
             description={`The file "${schema.path}" has not been created yet.`}
             className="absolute inset-0"
           >
-          <EmptyCreate type="content" name={schema.name}>Create file</EmptyCreate>
+          {canEdit && <EmptyCreate type="content" name={schema.name}>Create file</EmptyCreate>}
         </Message>
       );
     } else {
@@ -365,30 +356,46 @@ export function EntryEditor({
   }
 
   return (
-    isLoading
-      ? loadingSkeleton
-      : <EntryForm
-        title={displayTitle}
-        navigateBack={navigateBack}
-        fields={entryFields}
-        contentObject={entryContentObject}
-        onSubmit={onSubmit}
-        path={path}
-        history={history}
-        options={path && sha &&
-          <FileOptions
-            path={path}
-            sha={sha}
-            type={path === ".pages.yml" ? "settings" : schema.type}
-            name={name}
-            onDelete={handleDelete}
-            onRename={handleRename}
-          >
-            <Button variant="outline" size="icon" className="shrink-0" disabled={isLoading}>
-              <EllipsisVertical className="h-4 w-4" />
-            </Button>
-          </FileOptions>
-        }
-      />
+    <>
+      {/* Show Make Changes button in read-only mode */}
+      {isReadOnly && <RepoMakeChangesButton />}
+      
+      {/* Show read-only indicator when not on a user branch */}
+      {isReadOnly && (
+        <div className="bg-muted text-muted-foreground px-4 py-2 rounded-md mb-4 flex items-center">
+          <GitBranch className="h-4 w-4 mr-2" />
+          <span>You are in read-only mode. Create a branch to make changes.</span>
+        </div>
+      )}
+      
+      {isLoading ? (
+        loadingSkeleton
+      ) : (
+        <EntryForm
+          title={displayTitle}
+          navigateBack={navigateBack}
+          fields={entryFields}
+          contentObject={entryContentObject}
+          onSubmit={onSubmit}
+          path={path}
+          history={history}
+          readOnly={isReadOnly}
+          options={path && sha && canEdit &&
+            <FileOptions
+              path={path}
+              sha={sha}
+              type={path === ".pages.yml" ? "settings" : schema.type}
+              name={name}
+              onDelete={handleDelete}
+              onRename={handleRename}
+            >
+              <Button variant="outline" size="icon" className="shrink-0" disabled={isLoading}>
+                <EllipsisVertical className="h-4 w-4" />
+              </Button>
+            </FileOptions>
+          }
+        />
+      )}
+    </>
   );
-};
+}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useConfig } from "@/contexts/config-context";
 import { useBranchEdit } from "@/contexts/branch-edit-context";
+import { RepoMakeChangesButton } from "@/components/repo/repo-make-changes-button";
 import {
   getParentPath,
   getFileName,
@@ -29,6 +30,7 @@ import {
   Ellipsis,
   Folder,
   FolderPlus,
+  GitBranch,
   Plus,
   Search
 } from "lucide-react";
@@ -334,21 +336,21 @@ export function CollectionView({
     }
   }
 
-  if (!canEdit) {
-    return (
-      <Message
-        title="Branch editing restricted"
-        description="You need to create your own branch before you can edit content. Click 'Make Changes' in the branch dropdown to create a new branch."
-        className="absolute inset-0"
-        cta="Go to branch selection"
-        href={`/${config.owner}/${config.repo}`}
-      />
-    );
-  }
+  // We no longer block access to the collection view in read-only mode
 
   return (
     <>
       <div className="flex-1 flex flex-col space-y-6">
+        {/* Show Make Changes button in read-only mode */}
+        <RepoMakeChangesButton />
+        
+        {/* Show read-only indicator when not on a user branch */}
+        {!canEdit && (
+          <div className="bg-muted text-muted-foreground px-4 py-2 rounded-md mb-4 flex items-center">
+            <GitBranch className="h-4 w-4 mr-2" />
+            <span>You are in read-only mode. Create a branch to make changes.</span>
+          </div>
+        )}
         <header className="flex items-center gap-x-2">
           <div className="sm:flex-1">
             <PathBreadcrumb path={path || schema.path} rootPath={schema.path} handleNavigate={handleNavigate} className="hidden sm:block"/>

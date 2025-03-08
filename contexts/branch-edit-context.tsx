@@ -8,6 +8,7 @@ import { useUser } from "@/contexts/user-context";
 interface BranchEditContextType {
   canEdit: boolean;
   isUserBranch: boolean;
+  readOnly: boolean;
   hasPendingChanges: boolean;
   setPendingChanges: (hasPending: boolean) => void;
   createPullRequest: (title?: string, description?: string) => Promise<any>;
@@ -97,12 +98,15 @@ export const BranchEditProvider = ({
   
   // Determine if the user can edit content
   const canEdit = isUserBranch;
+  // Read-only mode is when the user is not on their branch
+  const readOnly = !isUserBranch;
   
   return (
     <BranchEditContext.Provider 
       value={{ 
         canEdit, 
-        isUserBranch, 
+        isUserBranch,
+        readOnly,
         hasPendingChanges, 
         setPendingChanges: setHasPendingChanges,
         createPullRequest
