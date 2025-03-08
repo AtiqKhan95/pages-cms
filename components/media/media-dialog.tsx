@@ -65,7 +65,12 @@ const MediaDialog = forwardRef(({
           <DialogDescription></DialogDescription>
         </DialogHeader>
         
-        <MediaView initialSelected={selected || []} onSelect={handleSelect} maxSelected={maxSelected} initialPath={initialPath || ""}/>
+        <MediaView 
+          selected={selected || []} 
+          onSelect={handleSelect} 
+          maxSelected={maxSelected} 
+          path={initialPath || ""}
+        />
         {config.object.media?.input &&
           <DialogFooter>
             <DialogClose asChild>

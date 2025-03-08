@@ -53,7 +53,7 @@ const MediaView = ({
 
   const [error, setError] = useState<string | null | undefined>(null);
   const [selected, setSelected] = useState<string[]>(initialSelected);
-  const [path, setPath] = useState<string>(initialPath || "");
+  const [currentPath, setCurrentPath] = useState<string>(initialPath || "");
   const [data, setData] = useState<Record<string, any>[] | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -67,7 +67,7 @@ const MediaView = ({
         setError(null);
 
         try {
-          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${encodeURIComponent(path)}`);
+          const response = await fetch(`/api/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/media/${encodeURIComponent(currentPath)}`);
           if (!response.ok) throw new Error(`Failed to fetch media: ${response.status} ${response.statusText}`);
 
           const data: any = await response.json();
@@ -85,7 +85,7 @@ const MediaView = ({
     }
     fetchMedia();
     
-  }, [config, path]);
+  }, [config, currentPath]);
 
   const handleUpload = useCallback((entry: any) => {
     setData((prevData) => {
@@ -128,7 +128,7 @@ const MediaView = ({
   }, []);
 
   const handleNavigate = (newPath: string) => {
-    setPath(newPath);
+    setCurrentPath(newPath);
     if (!onSelect) {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
       params.set("path", newPath || config?.object.media.input);
@@ -137,8 +137,8 @@ const MediaView = ({
   }
 
   const handleNavigateParent = () => {
-    if (!path || path === config.object.media.input) return;
-    handleNavigate(getParentPath(path));
+    if (!currentPath || currentPath === config.object.media.input) return;
+    handleNavigate(getParentPath(currentPath));
   }
 
   const handleSelect = useCallback((path: string) => {
@@ -204,7 +204,7 @@ const MediaView = ({
 
   if (error) {
     // TODO: should we use a custom error class with code?
-    if (path === config.object.media.input && error === "Not found") {
+    if (currentPath === config.object.media.input && error === "Not found") {
       return (
         <Message
             title="Media folder missing"
@@ -231,19 +231,19 @@ const MediaView = ({
     <div className="flex-1 flex flex-col space-y-4">
       <header className="flex items-center gap-x-2">
         <div className="sm:flex-1">
-          <PathBreadcrumb path={path} rootPath={config.object.media.input} handleNavigate={handleNavigate} className="hidden sm:block"/>
-          <Button onClick={handleNavigateParent} size="icon-sm" variant="outline" className="shrink-0 sm:hidden" disabled={!path || path === config.object.media.input}>
+          <PathBreadcrumb path={currentPath} rootPath={config.object.media.input} handleNavigate={handleNavigate} className="hidden sm:block"/>
+          <Button onClick={handleNavigateParent} size="icon-sm" variant="outline" className="shrink-0 sm:hidden" disabled={!currentPath || currentPath === config.object.media.input}>
             <CornerLeftUp className="w-4 h-4"/>
           </Button>
         </div>
         {isWorkingBranch && (
           <>
-            <FolderCreate path={path} type="media" onCreate={handleFolderCreate}>
+            <FolderCreate path={currentPath} type="media" onCreate={handleFolderCreate}>
               <Button type="button" variant="outline" className="ml-auto" size="icon-sm">
                 <FolderPlus className="h-3.5 w-3.5"/>
               </Button>
             </FolderCreate>
-            <MediaUpload path={path} onUpload={handleUpload}>
+            <MediaUpload path={currentPath} onUpload={handleUpload}>
               <Button type="button" size="sm" className="gap-2">
                 <Upload className="h-3.5 w-3.5"/>
                 Upload
