@@ -40,12 +40,13 @@ export async function getRepo(owner: string, repo: string): Promise<Repo | null>
       isPrivate: repoResponse.data.private
     };
   } catch (error: any) {
-    if (error.message === "No session found") {
+    if (error.message === "No session found" || error.message === "No GitHub token found") {
       redirect("/sign-in");
     }
     if (error.status === 404 || error.status === 403) {
       return null;
     }
-    throw error;
+    console.error("Error fetching repo:", error);
+    return null;
   }
 } 

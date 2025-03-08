@@ -44,17 +44,35 @@ export interface DatabaseUserAttributes {
 	accessToken: string;
 }
 
-export const getAuth = cache(
-	async (): Promise<{ user: User; session: Session } | { user: null; session: null }> => {
-		const sessionId = cookies().get(lucia.sessionCookieName)?.value ?? null;
-		if (!sessionId) {
-			return {
-				user: null,
-				session: null
-			};
-		}
+export type AuthResult = {
+	user: DatabaseUserAttributes | null;
+	session: Session | null;
+};
 
-		const result = await lucia.validateSession(sessionId);
+export const validateSession = async (sessionId: string | null): Promise<AuthResult> => {
+	if (!sessionId) {
+		return {
+			user: null,
+			session: null
+		};
+	}
+
+	try {
+		const { session, user } = await lucia.validateSession(sessionId);
+		return { session, user: user as DatabaseUserAttributes | null };
+	} catch (error) {
+		return {
+			user: null,
+			session: null
+		};
+	}
+};
+
+export const getAuth = cache(
+	async (): Promise<AuthResult> => {
+		const sessionId = cookies().get(lucia.sessionCookieName)?.value ?? null;
+		const result = await validateSession(sessionId);
+
 		// next.js throws when you attempt to set cookie when rendering page
 		try {
 			if (result.session && result.session.fresh) {
