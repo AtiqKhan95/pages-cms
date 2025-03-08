@@ -9,6 +9,7 @@ import { getConfig } from "@/lib/utils/config";
 import { normalizePath } from "@/lib/utils/file";
 import { getAuth } from "@/lib/auth";
 import { getToken } from "@/lib/token";
+import type { TokenUser } from "@/lib/token";
 
 export async function GET(
   request: NextRequest,
@@ -16,9 +17,9 @@ export async function GET(
 ) {
   try {
     const { user, session } = await getAuth();
-    if (!session) return new Response(null, { status: 401 });
+    if (!session || !user) return new Response(null, { status: 401 });
 
-    const token = await getToken(user, params.owner, params.repo);
+    const token = await getToken(user as TokenUser, params.owner, params.repo);
     if (!token) throw new Error("Token not found");
 
     const config = await getConfig(params.owner, params.repo, params.branch);

@@ -8,19 +8,20 @@ import { getConfig, updateConfig } from "@/lib/utils/config";
 import { getFileExtension, getFileName, normalizePath, serializedTypes } from "@/lib/utils/file";
 import { getAuth } from "@/lib/auth";
 import { getToken } from "@/lib/token";
+import type { TokenUser } from "@/lib/token";
 
-export async function POST(
-  request: Request,
-  { params }: { params: { owner: string, repo: string, branch: string, path: string } }
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { owner: string; repo: string; branch: string; path: string[] } }
 ) {
   try {
     const { user, session } = await getAuth();
-    if (!session) return new Response(null, { status: 401 });
+    if (!session || !user) return new Response(null, { status: 401 });
 
-    const token = await getToken(user, params.owner, params.repo);
+    const token = await getToken(user as TokenUser, params.owner, params.repo);
     if (!token) throw new Error("Token not found");
 
-    const normalizedPath = normalizePath(params.path);
+    const normalizedPath = normalizePath(params.path.join("/"));
 
     const config = await getConfig(params.owner, params.repo, params.branch);
     if (!config && normalizedPath !== ".pages.yml") throw new Error(`Configuration not found for ${params.owner}/${params.repo}/${params.branch}.`);
@@ -36,7 +37,7 @@ export async function POST(
         let schema = getSchemaByName(config?.object, data.name);
         if (!schema) throw new Error(`Schema not found for ${data.name}.`);
 
-        if (!normalizedPath.startsWith(schema.path)) throw new Error(`Invalid path "${params.path}" for ${data.type} "${data.name}".`);
+        if (!normalizedPath.startsWith(schema.path)) throw new Error(`Invalid path "${params.path.join("/")}" for ${data.type} "${data.name}".`);
 
         if (getFileName(normalizedPath) === ".gitkeep") {
           // Folder creation
@@ -100,7 +101,7 @@ export async function POST(
       case "media":
         if (!config?.object.media) throw new Error(`No media configuration found for ${params.owner}/${params.repo}/${params.branch}.`);
 
-        if (!normalizedPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${params.path}" for media.`);
+        if (!normalizedPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${params.path.join("/")}" for media.`);
         
         if (getFileName(normalizedPath) === ".gitkeep") {
           // Folder creation
@@ -115,7 +116,7 @@ export async function POST(
         }
         break;
       case "settings":
-        if (normalizedPath !== ".pages.yml") throw new Error(`Invalid path "${params.path}" for settings.`);
+        if (normalizedPath !== ".pages.yml") throw new Error(`Invalid path "${params.path.join("/")}" for settings.`);
 
         contentBase64 = Buffer.from(data.content.body ?? "").toString("base64");
         break;
@@ -287,6 +288,165 @@ export async function DELETE(
         sha: response?.data.commit.sha,
         name: response?.data.content?.name,
         path: response?.data.content?.path,
+      }
+    });
+  } catch (error: any) {
+    console.error(error);
+    return Response.json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export async function PUT(
+  request: Request,
+  { params }: { params: { owner: string; repo: string; branch: string; path: string[] } }
+) {
+  try {
+    const { user, session } = await getAuth();
+    if (!session || !user) return new Response(null, { status: 401 });
+
+    const token = await getToken(user as TokenUser, params.owner, params.repo);
+    if (!token) throw new Error("Token not found");
+
+    const normalizedPath = normalizePath(params.path.join("/"));
+
+    const config = await getConfig(params.owner, params.repo, params.branch);
+    if (!config && normalizedPath !== ".pages.yml") throw new Error(`Configuration not found for ${params.owner}/${params.repo}/${params.branch}.`);
+
+    const data: any = await request.json();
+
+    let contentBase64;
+
+    switch (data.type) {
+      case "content":
+        if (!data.name) throw new Error(`"name" is required for content.`);
+
+        let schema = getSchemaByName(config?.object, data.name);
+        if (!schema) throw new Error(`Schema not found for ${data.name}.`);
+
+        if (!normalizedPath.startsWith(schema.path)) throw new Error(`Invalid path "${params.path.join("/")}" for ${data.type} "${data.name}".`);
+
+        if (getFileName(normalizedPath) === ".gitkeep") {
+          // Folder creation
+          contentBase64 = "";
+        } else {
+          if (getFileExtension(normalizedPath) !== schema.extension) throw new Error(`Invalid extension "${getFileExtension(normalizedPath)}" for ${data.type} "${data.name}".`);
+
+          if (serializedTypes.includes(schema.format) && schema.fields) {
+            let contentFields;
+            let contentObject;
+
+            // Wrapping things in listWrapper to deal with lists at the root
+            if (schema.list) {
+              contentObject = { listWrapper: data.content };
+              contentFields = [{
+                name: "listWrapper",
+                type: "object",
+                list: true,
+                fields: schema.fields
+              }]
+            } else {
+              contentObject = data.content;
+              contentFields = schema.fields;
+            }
+
+            // Hidden fields are stripped in the client, we add them back
+            contentObject = deepMap(contentObject, contentFields, (value, field) => field.hidden ? getDefaultValue(field) : value);
+            // TODO: fetch the entry and merge values
+            
+            const zodSchema = generateZodSchema(contentFields);
+            const zodValidation = zodSchema.safeParse(contentObject);
+            
+            if (zodValidation.success === false ) {
+              const errorMessages = zodValidation.error.errors.map((error: any) => {
+                let message = error.message;
+                if (error.path.length > 0) message = `${message} at ${error.path.join(".")}`;
+                return message;
+              });
+              throw new Error(`Content validation failed: ${errorMessages.join(", ")}`);
+            }
+
+            const validatedContentObject = deepMap(zodValidation.data, contentFields, (value, field) => writeFns[field.type] ? writeFns[field.type](value, field, config || {}) : value);
+
+            const sanitizedContentObject = schema.list
+              ? sanitizeObject(validatedContentObject.listWrapper)
+              : sanitizeObject(validatedContentObject);
+
+            const stringifiedContentObject = stringify(
+              sanitizedContentObject,
+              {
+                format: schema.format,
+                delimiters: schema.delimiters
+              }
+            );
+            contentBase64 = Buffer.from(stringifiedContentObject).toString("base64");
+          } else {
+            contentBase64 = Buffer.from(data.content.body ?? "").toString("base64");
+          }
+        }
+        break;
+      case "media":
+        if (!config?.object.media) throw new Error(`No media configuration found for ${params.owner}/${params.repo}/${params.branch}.`);
+
+        if (!normalizedPath.startsWith(config.object.media.input)) throw new Error(`Invalid path "${params.path.join("/")}" for media.`);
+        
+        if (getFileName(normalizedPath) === ".gitkeep") {
+          // Folder creation
+          contentBase64 = "";
+        } else {
+          if (
+            config.object.media.extensions?.length > 0 &&
+            !config.object.media.extensions.includes(getFileExtension(normalizedPath))
+          ) throw new Error(`Invalid extension "${getFileExtension(normalizedPath)}" for media.`);
+
+          contentBase64 = data.content;
+        }
+        break;
+      case "settings":
+        if (normalizedPath !== ".pages.yml") throw new Error(`Invalid path "${params.path.join("/")}" for settings.`);
+
+        contentBase64 = Buffer.from(data.content.body ?? "").toString("base64");
+        break;
+      default:
+        throw new Error(`Invalid type "${data.type}".`);
+    }
+    
+    const response = await githubSaveFile(token, params.owner, params.repo, params.branch, normalizedPath, contentBase64, data.sha);
+  
+    const savedPath = response?.data.content?.path;
+
+    let newConfig;
+    if (data.type === "settings") {
+      const parsedConfig = parseConfig(data.content.body ?? "");
+      const configObject = normalizeConfig(parsedConfig.document.toJSON());
+      newConfig = {
+        owner: params.owner,
+        repo: params.repo,
+        branch: params.branch,
+        sha: response?.data.content?.sha as string,
+        version: configVersion ?? "0.0",
+        object: configObject
+      };
+      
+      await updateConfig(newConfig);
+    }
+    
+    return Response.json({
+      status: "success",
+      message: savedPath !== normalizedPath
+        ? `File "${normalizedPath}" saved successfully but renamed to "${savedPath}" to avoid naming conflict.`
+        : `File "${normalizedPath}" saved successfully.`,
+      data: {
+        type: response?.data.content?.type,
+        sha: response?.data.content?.sha,
+        name: response?.data.content?.name,
+        path: savedPath,
+        extension: getFileExtension(response?.data.content?.name || ""),
+        size: response?.data.content?.size,
+        url: response?.data.content?.download_url,
+        config: newConfig ?? undefined,
       }
     });
   } catch (error: any) {

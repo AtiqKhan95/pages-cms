@@ -4,16 +4,17 @@ import { getConfig } from "@/lib/utils/config";
 import { getFileExtension, normalizePath } from "@/lib/utils/file";
 import { getAuth } from "@/lib/auth";
 import { getToken } from "@/lib/token";
+import type { TokenUser } from "@/lib/token";
 
 export async function POST(
   request: Request,
-  { params }: { params: { owner: string, repo: string, branch: string, path: string } }
+  { params }: { params: { owner: string; repo: string; branch: string; path: string[] } }
 ) {
   try {
     const { user, session } = await getAuth();
-    if (!session) return new Response(null, { status: 401 });
+    if (!session || !user) return new Response(null, { status: 401 });
 
-    const token = await getToken(user, params.owner, params.repo);
+    const token = await getToken(user as TokenUser, params.owner, params.repo);
     if (!token) throw new Error("Token not found");
 
     if (params.path === ".pages.yml") throw new Error(`Renaming the settings file isn't allowed.`);
