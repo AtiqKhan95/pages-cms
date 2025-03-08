@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getAuth } from "@/lib/auth";
 import { getAccounts } from "@/lib/utils/accounts";
 import { Providers } from "@/components/providers";
+import { User } from "@/types/user";
 
 export default async function Layout({
   children,
@@ -9,9 +10,10 @@ export default async function Layout({
   children: React.ReactNode;
 }>) {
   const { session, user } = await getAuth();
-  if (!session) return redirect("/sign-in");
+  if (!session || !user) return redirect("/sign-in");
 
-  const accounts = await getAccounts(user);
+  // Cast the user to the expected User type since we know it has all required properties
+  const accounts = await getAccounts(user as User);
   const userWithAccounts = { ...user, accounts };
   
 	return (
