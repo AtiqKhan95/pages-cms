@@ -58,7 +58,10 @@ const collaboratorTable = sqliteTable("collaborator", {
   owner: text("owner").notNull(),
   repo: text("repo").notNull(),
   branch: text("branch"),
-  email: text("email").notNull(),
+  email: text("email"),
+  githubUsername: text("github_username"),
+  invitationId: integer("invitation_id"),
+  invitationStatus: text("invitation_status").default("pending"),
   userId: text("user_id").references(() => userTable.id),
   status: text("type"),
   invitedBy: text("invited_by").notNull().references(() => userTable.id)

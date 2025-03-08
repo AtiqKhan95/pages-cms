@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFormState } from "react-dom";
-import { handleRemoveCollaborator, handleAddCollaborator } from "@/lib/actions/collaborator";
+import { handleRemoveCollaborator, handleAddCollaborator, checkInvitationStatus } from "@/lib/actions/collaborator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SubmitButton } from "@/components/submit-button";
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Ban, Loader } from "lucide-react";
+import { Ban, Loader, RefreshCw, CheckCircle, Clock, XCircle } from "lucide-react";
 
 export function Collaborators({
   owner,
@@ -39,13 +39,19 @@ export function Collaborators({
   // TODO: add support for branches and accounts collaborators
   const [collaborators, setCollaborators] = useState<any[]>([]);
   const [addCollaboratorState, addCollaboratorAction] = useFormState(handleAddCollaborator, { message: "", data: [] });
-  const [email, setEmail] = useState<string>("");
+  const [username, setUsername] = useState<string>("");
   const [removing, setRemoving] = useState<number[]>([]);
+  const [refreshing, setRefreshing] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   // TODO: remove this, we can probably let error.tsx catch that
   const [error, setError] = useState<string | undefined | null>(null);
 
-  const isEmailInList = useMemo(() => collaborators.some(collaborator => collaborator.email === email), [email, collaborators]);
+  const isUsernameInList = useMemo(() => 
+    collaborators.some(collaborator => 
+      collaborator.githubUsername?.toLowerCase() === username.toLowerCase()
+    ), 
+    [username, collaborators]
+  );
 
   const addNewCollaborator = useCallback((newCollaborator: any) => {
     setCollaborators(prevCollaborators => [...prevCollaborators, ...newCollaborator]);
@@ -99,6 +105,31 @@ export function Collaborators({
     }
   }
 
+  const handleRefreshStatus = async (collaboratorId: number) => {
+    setRefreshing([...refreshing, collaboratorId]);
+    
+    try {
+      const result = await checkInvitationStatus(owner, repo, collaboratorId);
+      
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.status) {
+        // Update the collaborator status in the local state
+        setCollaborators(collaborators.map(collaborator => 
+          collaborator.id === collaboratorId 
+            ? { ...collaborator, invitationStatus: result.status } 
+            : collaborator
+        ));
+        
+        toast.success(`Invitation status: ${result.status}`);
+      }
+    } catch(error: any) {
+      toast.error(error.message);
+    } finally {
+      setRefreshing(refreshing.filter((id) => id !== collaboratorId));
+    }
+  }
+
   useEffect(() => {
     if (addCollaboratorState?.message) {
       if (addCollaboratorState.data && addCollaboratorState.data.length > 0) {
@@ -106,7 +137,7 @@ export function Collaborators({
       }
       
       toast.success(addCollaboratorState.message, { duration: 10000});
-      setEmail("");
+      setUsername("");
     }
   }, [addCollaboratorState, addNewCollaborator]);
 
@@ -142,13 +173,56 @@ export function Collaborators({
               {collaborators.map((collaborator: any) => (
                 <li key={collaborator.id} className="flex gap-x-2 items-center border border-b-0 last:border-b first:rounded-t-md last:rounded-b-md px-3 py-2 text-sm">
                   <Avatar className="h-6 w-6">
-                    <AvatarImage src={`https://unavatar.io/${collaborator.email}?fallback=false`} alt={`${collaborator.email}'s avatar`} />
+                    <AvatarImage 
+                      src={collaborator.githubUsername 
+                        ? `https://github.com/${collaborator.githubUsername}.png` 
+                        : `https://unavatar.io/${collaborator.email}?fallback=false`} 
+                      alt={`${collaborator.githubUsername || collaborator.email}'s avatar`} 
+                    />
                     <AvatarFallback className="font-medium text-muted-foreground uppercase text-xs">
-                      {collaborator.email.split('@')[0].substring(0, 2)}
+                      {collaborator.githubUsername 
+                        ? collaborator.githubUsername.substring(0, 2) 
+                        : collaborator.email 
+                          ? collaborator.email.split('@')[0].substring(0, 2)
+                          : "??"
+                      }
                     </AvatarFallback>
                   </Avatar>
-                  <div className="font-medium text-left truncate">
-                    {collaborator.email}
+                  <div className="flex flex-col">
+                    <div className="font-medium text-left truncate">
+                      {collaborator.githubUsername || collaborator.email}
+                    </div>
+                    {collaborator.invitationStatus && (
+                      <div className="text-xs flex items-center gap-1">
+                        {collaborator.invitationStatus === "pending" && (
+                          <>
+                            <Clock className="h-3 w-3 text-yellow-500" />
+                            <span className="text-muted-foreground">Pending</span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-4 w-4 ml-1" 
+                              onClick={() => handleRefreshStatus(collaborator.id)}
+                              disabled={refreshing.includes(collaborator.id)}
+                            >
+                              <RefreshCw className={`h-3 w-3 ${refreshing.includes(collaborator.id) ? 'animate-spin' : ''}`} />
+                            </Button>
+                          </>
+                        )}
+                        {collaborator.invitationStatus === "accepted" && (
+                          <>
+                            <CheckCircle className="h-3 w-3 text-green-500" />
+                            <span className="text-muted-foreground">Accepted</span>
+                          </>
+                        )}
+                        {collaborator.invitationStatus === "declined" && (
+                          <>
+                            <XCircle className="h-3 w-3 text-red-500" />
+                            <span className="text-muted-foreground">Declined</span>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -161,7 +235,7 @@ export function Collaborators({
                       <AlertDialogHeader>
                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will remove access to &quot;{owner}/{repo}&quot; for &quot;{collaborator.email}&quot;.
+                          This will remove access to &quot;{owner}/{repo}&quot; for &quot;{collaborator.githubUsername || collaborator.email}&quot;.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -183,19 +257,19 @@ export function Collaborators({
           <input type="hidden" name="owner" value={owner} />
           <input type="hidden" name="repo" value={repo} />
           <Input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            name="username"
+            placeholder="GitHub username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
           />
           {addCollaboratorState?.error &&
             <div className="text-sm font-medium text-destructive mt-2 ">{addCollaboratorState.error}</div>
           }
         </div>
-        <SubmitButton type="submit" disabled={isEmailInList}>
-          Invite by email
+        <SubmitButton type="submit" disabled={isUsernameInList}>
+          Invite collaborator
         </SubmitButton>
       </form>
     </div>

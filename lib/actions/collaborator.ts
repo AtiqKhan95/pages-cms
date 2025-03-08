@@ -3,20 +3,25 @@
 import { getAuth } from "@/lib/auth";
 import { getInstallations, getInstallationRepos } from "@/lib/githubApp";
 import { getUserToken } from "@/lib/token";
-import { InviteEmailTemplate } from "@/components/email/invite";
-import { Resend } from "resend";
 import { db } from "@/db";
 import { and, eq} from "drizzle-orm";
 import { collaboratorTable } from "@/db/schema";
 import { z } from "zod";
+import { 
+  inviteGitHubCollaborator, 
+  validateGitHubUsername,
+  cancelInvitation,
+  removeCollaborator,
+  checkInvitationStatus as checkGitHubInvitationStatus
+} from "@/lib/utils/collaborator";
 
 const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 	try {
-		// TODO: remove the requirement for Github account, let any collaborator invite others
+		// Require GitHub authentication
 		const { user } = await getAuth();
 		if (!user || !user.githubId) throw new Error("You must be signed in with GitHub to invite collaborators.");
 
-		// TODO: add support for branches
+		// Validate owner and repo
 		const ownerAndRepoValidation = z.object({
 			owner: z.string().trim().min(1),
 			repo: z.string().trim().min(1),
@@ -24,15 +29,20 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 			owner: formData.get("owner"),
 			repo: formData.get("repo")
 		});
-		if (!ownerAndRepoValidation.success) throw new Error ("Invalid owner and/or repo");
+		if (!ownerAndRepoValidation.success) throw new Error("Invalid owner and/or repo");
 
 		const owner = ownerAndRepoValidation.data.owner;
 		const repo = ownerAndRepoValidation.data.repo;
 
-		const emailValidation = z.string().trim().email().safeParse(formData.get("email"));
-		if (!emailValidation.success) throw new Error ("Invalid email");
+		// Validate GitHub username
+		const usernameValidation = z.string().trim().min(1).safeParse(formData.get("username"));
+		if (!usernameValidation.success) throw new Error("Invalid GitHub username");
 
-		const email = emailValidation.data;
+		const username = usernameValidation.data;
+
+		// Validate that the GitHub username exists
+		const isValidUsername = await validateGitHubUsername(username);
+		if (!isValidUsername) throw new Error(`GitHub user "${username}" not found`);
 
 		const token = await getUserToken();
   	if (!token) throw new Error("Token not found");
@@ -40,46 +50,23 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 		const installations = await getInstallations(token, [owner]);
 		if (installations.length !== 1) throw new Error(`"${owner}" is not part of your GitHub App installations`);
 
-		const installationRepos =  await getInstallationRepos(token, installations[0].id, [repo]);
+		const installationRepos = await getInstallationRepos(token, installations[0].id, [repo]);
 		if (installationRepos.length !== 1) throw new Error(`"${owner}/${repo}" is not part of your GitHub App installations`);
 
+		// Check if user is already invited
 		const collaborator = await db.query.collaboratorTable.findFirst({
 			where: and(
         eq(collaboratorTable.ownerId, installationRepos[0].owner.id),
         eq(collaboratorTable.repoId, installationRepos[0].id),
-				eq(collaboratorTable.email, email)
+				eq(collaboratorTable.githubUsername, username)
       ),
 		});
-		if (collaborator) throw new Error(`${email} is already invited to "${owner}/${repo}".`);
+		if (collaborator) throw new Error(`${username} is already invited to "${owner}/${repo}".`);
 
-		const baseUrl = process.env.BASE_URL
-			? process.env.BASE_URL
-			: process.env.VERCEL_PROJECT_PRODUCTION_URL
-				? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-				: "";
+		// Invite via GitHub API
+		const invitation = await inviteGitHubCollaborator(token, owner, repo, username);
 
-		const resend = new Resend(process.env.RESEND_API_KEY);
-
-		Promise.resolve().then(async () => {
-      const { data, error } = await resend.emails.send({
-				from: "Pages CMS <no-reply@mail.pagescms.org>",
-				to: [email],
-				subject: `Join "${owner}/${repo}" on Pages CMS`,
-				react: InviteEmailTemplate({
-					repoUrl: `${baseUrl}/${owner}/${repo}`,
-					repoName: `${formData.get("owner")}/${formData.get("repo")}`,
-					email: email,
-					invitedByName: user.githubName || user.githubUsername,
-					invitedByUrl: `https://github.com/${user.githubUsername}`,
-				}),
-			});
-	
-			if (error) {
-				console.error(`Failed to send invitation email to ${email}:`, error.message);
-				throw new Error(error.message);
-			}
-    });
-
+		// Store in database
 		const newCollaborator = await db.insert(collaboratorTable).values({
 			type: installationRepos[0].owner.type === "User" ? "user" : "org",
 			installationId: installations[0].id,
@@ -87,12 +74,14 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 			repoId: installationRepos[0].id,
 			owner: installationRepos[0].owner.login,
 			repo: installationRepos[0].name,
-			email,
+			githubUsername: username,
+			invitationId: invitation.invitationId,
+			invitationStatus: "pending",
 			invitedBy: user.id
 		}).returning();
 
 		return {
-			message: `${email} invited to "${owner}/${repo}".`,
+			message: `${username} invited to "${owner}/${repo}". They will receive a notification on GitHub.`,
 			data: newCollaborator
 		};
 	} catch (error: any) {
@@ -104,7 +93,7 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 const handleRemoveCollaborator = async (collaboratorId: number, owner: string, repo: string) => {
 	try {
 		const { user } = await getAuth();
-		if (!user || !user.githubId) throw new Error("You must be signed in with GitHub to invite collaborators.");
+		if (!user || !user.githubId) throw new Error("You must be signed in with GitHub to manage collaborators.");
 
 		const token = await getUserToken();
   	if (!token) throw new Error("Token not found");
@@ -115,9 +104,20 @@ const handleRemoveCollaborator = async (collaboratorId: number, owner: string, r
 		const installations = await getInstallations(token, [owner]);
 		if (installations.length !== 1) throw new Error(`"${owner}" is not part of your GitHub App installations`);
 
-		const installationRepos =  await getInstallationRepos(token, installations[0].id, [repo]);
+		const installationRepos = await getInstallationRepos(token, installations[0].id, [repo]);
 		if (installationRepos.length !== 1) throw new Error(`"${owner}/${repo}" is not part of your GitHub App installations`);
 
+		// If there's a pending invitation, cancel it
+		if (collaborator.invitationId && collaborator.invitationStatus === "pending") {
+			await cancelInvitation(token, owner, repo, collaborator.invitationId);
+		}
+		
+		// If the user is already a collaborator, remove them
+		if (collaborator.githubUsername && collaborator.invitationStatus === "accepted") {
+			await removeCollaborator(token, owner, repo, collaborator.githubUsername);
+		}
+
+		// Delete from database
 		const deletedCollaborator = await db.delete(collaboratorTable).where(
 			and(
 				eq(collaboratorTable.id, collaboratorId),
@@ -127,11 +127,45 @@ const handleRemoveCollaborator = async (collaboratorId: number, owner: string, r
 
 		if (!deletedCollaborator || deletedCollaborator.length === 0) throw new Error("Failed to delete collaborator");
 
-		return { message: `Invitation to ${collaborator.email} for "${owner}/${repo}" successfully removed.` };
+		const displayName = collaborator.githubUsername || collaborator.email || "Collaborator";
+		return { message: `${displayName} removed from "${owner}/${repo}".` };
 	} catch (error: any) {
 		console.error(error);
 		return { error: error.message };
 	}
 };
 
-export { handleAddCollaborator, handleRemoveCollaborator };
+// Function to check invitation status
+const checkInvitationStatus = async (owner: string, repo: string, collaboratorId: number): Promise<{ status?: string, error?: string }> => {
+	try {
+		const { user } = await getAuth();
+		if (!user || !user.githubId) throw new Error("You must be signed in with GitHub.");
+
+		const token = await getUserToken();
+		if (!token) throw new Error("Token not found");
+
+		const collaborator = await db.query.collaboratorTable.findFirst({ 
+			where: eq(collaboratorTable.id, collaboratorId) 
+		});
+		
+		if (!collaborator) throw new Error("Collaborator not found");
+		if (!collaborator.invitationId) throw new Error("No invitation found for this collaborator");
+
+		// Use the GitHub API to check invitation status
+		const status = await checkGitHubInvitationStatus(token, owner, repo, collaborator.invitationId);
+		
+		// Update the database with the current status
+		if (status.status === "accepted" || status.status === "declined") {
+			await db.update(collaboratorTable)
+				.set({ invitationStatus: status.status })
+				.where(eq(collaboratorTable.id, collaboratorId));
+		}
+
+		return { status: status.status };
+	} catch (error: any) {
+		console.error(error);
+		return { error: error.message };
+	}
+};
+
+export { handleAddCollaborator, handleRemoveCollaborator, checkInvitationStatus };
