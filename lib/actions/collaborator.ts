@@ -40,12 +40,12 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 
 		const username = usernameValidation.data;
 
-		// Validate that the GitHub username exists
-		const isValidUsername = await validateGitHubUsername(username);
-		if (!isValidUsername) throw new Error(`GitHub user "${username}" not found`);
-
 		const token = await getUserToken();
   	if (!token) throw new Error("Token not found");
+
+		// Validate that the GitHub username exists
+		const isValidUsername = await validateGitHubUsername(token, username);
+		if (!isValidUsername) throw new Error(`GitHub user "${username}" not found`);
 		
 		const installations = await getInstallations(token, [owner]);
 		if (installations.length !== 1) throw new Error(`"${owner}" is not part of your GitHub App installations`);

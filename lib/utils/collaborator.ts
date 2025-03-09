@@ -171,16 +171,30 @@ export async function cancelInvitation(
 
 /**
  * Validates if a GitHub username exists
+ * @param token GitHub token
  * @param username GitHub username to validate
  * @returns Boolean indicating if the username exists
  */
-export async function validateGitHubUsername(username: string): Promise<boolean> {
+export async function validateGitHubUsername(token: string, username: string): Promise<boolean> {
   try {
-    const response = await fetch(`https://api.github.com/users/${username}`);
-    return response.ok;
-  } catch (error) {
+    const octokit = createOctokitInstance(token);
+    const response = await octokit.request('GET /users/{username}', {
+      username,
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+    return response.status === 200;
+  } catch (error: any) {
     console.error("Error validating GitHub username:", error);
-    return false;
+    // If the error is a 404, the username doesn't exist
+    if (error.status === 404) {
+      return false;
+    }
+    // For other errors, log them but don't fail validation
+    // This prevents API rate limiting or network issues from blocking invitations
+    console.warn("Non-404 error during username validation:", error);
+    return true;
   }
 }
 
