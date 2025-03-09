@@ -1,8 +1,7 @@
 import { type NextRequest } from "next/server";
 import { getAuth } from "@/lib/auth";
 import { getUserToken } from "@/lib/token";
-import { and, eq } from "drizzle-orm";
-import { db, client } from "@/db";
+import { db } from "@/db";
 import { collaboratorTable } from "@/db/schema";
 import { getInstallations, getInstallationRepos } from "@/lib/githubApp";
 import { createOctokitInstance } from "@/lib/utils/octokit";
@@ -18,62 +17,34 @@ export async function GET(
     const token = await getUserToken();
     if (!token) throw new Error("Token not found");
 
-    // TODO: support for branches and account collaborators
+    // Validate slug parameters
     if (!params.slug || params.slug.length !== 2) throw new Error("Invalid slug: owner and repo are mandatory");
 
     const owner = params.slug[0];
-		const repo = params.slug[1];
+    const repo = params.slug[1];
 
+    // Get GitHub installation info
     const installations = await getInstallations(token, [owner]);
-		if (installations.length !== 1) throw new Error(`"${owner}" is not part of your GitHub App installations`);
+    if (installations.length !== 1) throw new Error(`"${owner}" is not part of your GitHub App installations`);
 
-		const installationRepos =  await getInstallationRepos(token, installations[0].id, [repo]);
-		if (installationRepos.length !== 1) throw new Error(`"${owner}/${repo}" is not part of your GitHub App installations`);
+    const installationRepos = await getInstallationRepos(token, installations[0].id, [repo]);
+    if (installationRepos.length !== 1) throw new Error(`"${owner}/${repo}" is not part of your GitHub App installations`);
     
-    // Use raw SQL to avoid column name issues
-    const result = await client.execute({
-      sql: `SELECT * FROM collaborator WHERE owner_id = ? AND repo_id = ?`,
-      args: [installationRepos[0].owner.id, installationRepos[0].id]
+    // Get collaborators from database
+    const dbCollaborators = await db.query.collaboratorTable.findMany({
+      where: (collaborator, { eq, and }) => and(
+        eq(collaborator.owner, owner),
+        eq(collaborator.repo, repo)
+      )
     });
     
-    // Format the data to match what the UI expects
-    const collaborators = result.rows.map(row => {
-      return {
-        id: row.id,
-        type: row.type,
-        installationId: row.installation_id,
-        ownerId: row.owner_id,
-        repoId: row.repo_id,
-        owner: row.owner,
-        repo: row.repo,
-        branch: row.branch,
-        email: row.email,
-        githubUsername: row.github_username || row.githubUsername,
-        invitationId: row.invitation_id || row.invitationId,
-        invitationStatus: row.invitation_status || row.invitationStatus || "pending",
-        userId: row.user_id,
-        invitedBy: row.invited_by
-      };
-    });
+    // Create Octokit instance
+    const octokit = createOctokitInstance(token);
     
-    // Now check for actual repository collaborators who might not be in our database
+    // Get collaborators from GitHub
+    const githubCollaborators = [];
     try {
-      // Create Octokit instance with installation token for better permissions
-      const octokit = createOctokitInstance(token);
-      
-      // Try a different approach - get all collaborators using the installation token
-      // This should have higher permissions than the user token
-      const installationToken = await octokit.request('POST /app/installations/{installation_id}/access_tokens', {
-        installation_id: installations[0].id,
-        headers: {
-          'X-GitHub-Api-Version': '2022-11-28'
-        }
-      });
-      
-      const installationOctokit = createOctokitInstance(installationToken.data.token);
-      
-      // Get all collaborators from GitHub
-      const githubCollaborators = await installationOctokit.request('GET /repos/{owner}/{repo}/collaborators', {
+      const response = await octokit.request('GET /repos/{owner}/{repo}/collaborators', {
         owner,
         repo,
         headers: {
@@ -81,60 +52,40 @@ export async function GET(
         }
       });
       
-      // For each GitHub collaborator, check if they're already in our list
-      for (const ghCollaborator of githubCollaborators.data) {
-        const exists = collaborators.some(c => {
-          const username = c.githubUsername;
-          return typeof username === 'string' && 
-                 typeof ghCollaborator.login === 'string' && 
-                 username.toLowerCase() === ghCollaborator.login.toLowerCase();
-        });
-        
-        // If not in our list, add them
-        if (!exists) {
-          // Try to find if they're a user in our system
-          const userResult = await client.execute({
-            sql: `SELECT * FROM user WHERE github_username = ? OR githubUsername = ?`,
-            args: [ghCollaborator.login, ghCollaborator.login]
-          });
-          
-          // Add with all required fields to match the type
-          collaborators.push({
-            id: Date.now() + collaborators.length, // Generate a temporary ID
-            type: "github",
-            installationId: installations[0].id,
-            ownerId: installationRepos[0].owner.id,
-            repoId: installationRepos[0].id,
-            owner: owner,
-            repo: repo,
-            branch: null,
-            email: null,
-            githubUsername: ghCollaborator.login,
-            invitationId: null,
-            invitationStatus: "accepted", // They're already a collaborator
-            userId: userResult.rows.length > 0 ? userResult.rows[0].id : null,
-            invitedBy: null
-          });
-        }
-      }
+      githubCollaborators.push(...response.data);
     } catch (error) {
       console.error("Error fetching GitHub collaborators:", error);
-      
-      // Fallback approach - manually add caceiro if they're not in the list
-      const caceiro = "caceiro";
-      const existsCaceiro = collaborators.some(c => {
-        const username = c.githubUsername;
-        return typeof username === 'string' && username.toLowerCase() === caceiro.toLowerCase();
+      // Continue with database collaborators if GitHub API fails
+    }
+    
+    // Merge database and GitHub collaborators
+    const collaborators = [];
+    
+    // First add all database collaborators
+    for (const dbCollab of dbCollaborators) {
+      collaborators.push({
+        id: dbCollab.id,
+        type: dbCollab.type,
+        installationId: dbCollab.installationId,
+        ownerId: dbCollab.ownerId,
+        repoId: dbCollab.repoId,
+        owner: dbCollab.owner,
+        repo: dbCollab.repo,
+        githubUsername: dbCollab.githubUsername,
+        invitationId: dbCollab.invitationId,
+        invitationStatus: dbCollab.invitationStatus || "pending",
+        userId: dbCollab.userId,
+        invitedBy: dbCollab.invitedBy
       });
+    }
+    
+    // Then add GitHub collaborators that aren't in the database
+    for (const ghCollab of githubCollaborators) {
+      const exists = collaborators.some(c => 
+        c.githubUsername && c.githubUsername.toLowerCase() === ghCollab.login.toLowerCase()
+      );
       
-      if (!existsCaceiro) {
-        // Try to find if they're a user in our system
-        const userResult = await client.execute({
-          sql: `SELECT * FROM user WHERE github_username = ? OR githubUsername = ?`,
-          args: [caceiro, caceiro]
-        });
-        
-        // Add with all required fields to match the type
+      if (!exists) {
         collaborators.push({
           id: Date.now() + collaborators.length, // Generate a temporary ID
           type: "github",
@@ -143,17 +94,11 @@ export async function GET(
           repoId: installationRepos[0].id,
           owner: owner,
           repo: repo,
-          branch: null,
-          email: null,
-          githubUsername: caceiro,
-          invitationId: null,
+          githubUsername: ghCollab.login,
           invitationStatus: "accepted", // They're already a collaborator
-          userId: userResult.rows.length > 0 ? userResult.rows[0].id : null,
           invitedBy: null
         });
       }
-      
-      // Continue with our database collaborators if GitHub API fails
     }
     
     return Response.json({
