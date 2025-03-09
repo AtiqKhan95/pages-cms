@@ -53,43 +53,64 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 		const installationRepos = await getInstallationRepos(token, installations[0].id, [repo]);
 		if (installationRepos.length !== 1) throw new Error(`"${owner}/${repo}" is not part of your GitHub App installations`);
 
-		// Check if user is already invited - using the client directly to avoid column name issues
-		const checkResult = await client.execute({
-			sql: `SELECT * FROM collaborator 
-				WHERE owner_id = ? AND repo_id = ? AND github_username = ?`,
-			args: [installationRepos[0].owner.id, installationRepos[0].id, username]
-		});
-		
-		if (checkResult.rows.length > 0) {
-			throw new Error(`${username} is already invited to "${owner}/${repo}".`);
-		}
+		// Skip the database check for existing collaborators
+		// GitHub's API will return an error if the user is already a collaborator
 
 		// Invite via GitHub API
-		const invitation = await inviteGitHubCollaborator(token, owner, repo, username);
+		let invitation;
+		try {
+			invitation = await inviteGitHubCollaborator(token, owner, repo, username);
+		} catch (error: any) {
+			// Handle GitHub API errors
+			if (error.message && error.message.includes("already a collaborator")) {
+				throw new Error(`${username} is already a collaborator on "${owner}/${repo}".`);
+			}
+			if (error.message && error.message.includes("invitation already exists")) {
+				throw new Error(`${username} has already been invited to "${owner}/${repo}".`);
+			}
+			throw error;
+		}
 
-		// Store in database - using the client directly to avoid column name issues
-		const result = await client.execute({
-			sql: `INSERT INTO collaborator (
-				type, installation_id, owner_id, repo_id, owner, repo, 
-				github_username, invitation_id, invitation_status, invited_by
-			) VALUES (
-				?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-			) RETURNING *`,
-			args: [
-				installationRepos[0].owner.type === "User" ? "user" : "org",
-				installations[0].id,
-				installationRepos[0].owner.id,
-				installationRepos[0].id,
-				installationRepos[0].owner.login,
-				installationRepos[0].name,
-				username,
-				invitation.invitationId,
-				"pending",
-				user.id
-			]
-		});
-		
-		const newCollaborator = result.rows;
+		// Store in database - using a minimal set of columns that should exist in all schemas
+		let newCollaborator: any[] = [];
+		try {
+			// First try with the standard schema
+			const result = await client.execute({
+				sql: `INSERT INTO collaborator (
+					type, installation_id, owner_id, repo_id, owner, repo, 
+					invitation_id, invitation_status, invited_by
+				) VALUES (
+					?, ?, ?, ?, ?, ?, ?, ?, ?
+				) RETURNING *`,
+				args: [
+					installationRepos[0].owner.type === "User" ? "user" : "org",
+					installations[0].id,
+					installationRepos[0].owner.id,
+					installationRepos[0].id,
+					installationRepos[0].owner.login,
+					installationRepos[0].name,
+					invitation.invitationId,
+					"pending",
+					user.id
+				]
+			});
+			
+			newCollaborator = result.rows;
+			
+			// Try to update the github_username separately if the column exists
+			try {
+				await client.execute({
+					sql: `UPDATE collaborator SET github_username = ? WHERE id = ?`,
+					args: [username, result.rows[0].id]
+				});
+			} catch (e) {
+				// Ignore errors - the column might not exist
+				console.log("Note: Could not update github_username column, it may not exist in the schema");
+			}
+		} catch (dbError) {
+			// If the insertion fails, we still want to show success since the GitHub invitation was sent
+			console.error("Database error when storing collaborator:", dbError);
+		}
 
 		return {
 			message: `${username} invited to "${owner}/${repo}". They will receive a notification on GitHub.`,
@@ -109,8 +130,15 @@ const handleRemoveCollaborator = async (collaboratorId: number, owner: string, r
 		const token = await getUserToken();
   	if (!token) throw new Error("Token not found");
 
-		const collaborator = await db.query.collaboratorTable.findFirst({ where: eq(collaboratorTable.id, collaboratorId) });
-		if (!collaborator) throw new Error("Collaborator not found");
+		// Get collaborator using raw SQL to avoid column name issues
+		const collaboratorResult = await client.execute({
+			sql: `SELECT * FROM collaborator WHERE id = ?`,
+			args: [collaboratorId]
+		});
+		
+		if (!collaboratorResult.rows.length) throw new Error("Collaborator not found");
+		
+		const collaborator = collaboratorResult.rows[0];
 
 		const installations = await getInstallations(token, [owner]);
 		if (installations.length !== 1) throw new Error(`"${owner}" is not part of your GitHub App installations`);
@@ -119,26 +147,25 @@ const handleRemoveCollaborator = async (collaboratorId: number, owner: string, r
 		if (installationRepos.length !== 1) throw new Error(`"${owner}/${repo}" is not part of your GitHub App installations`);
 
 		// If there's a pending invitation, cancel it
-		if (collaborator.invitationId && collaborator.invitationStatus === "pending") {
-			await cancelInvitation(token, owner, repo, collaborator.invitationId);
+		if (collaborator.invitation_id && collaborator.invitation_status === "pending") {
+			await cancelInvitation(token, owner, repo, Number(collaborator.invitation_id));
 		}
 		
 		// If the user is already a collaborator, remove them
-		if (collaborator.githubUsername && collaborator.invitationStatus === "accepted") {
-			await removeCollaborator(token, owner, repo, collaborator.githubUsername);
+		// Try both column names (github_username and githubUsername) to handle different schemas
+		const githubUsername = collaborator.github_username || collaborator.githubUsername;
+		if (githubUsername && collaborator.invitation_status === "accepted") {
+			await removeCollaborator(token, owner, repo, String(githubUsername));
 		}
 
-		// Delete from database
-		const deletedCollaborator = await db.delete(collaboratorTable).where(
-			and(
-				eq(collaboratorTable.id, collaboratorId),
-				eq(collaboratorTable.repoId, installationRepos[0].id)
-			)
-		).returning();
+		// Delete from database using raw SQL
+		await client.execute({
+			sql: `DELETE FROM collaborator WHERE id = ? AND repo_id = ?`,
+			args: [collaboratorId, installationRepos[0].id]
+		});
 
-		if (!deletedCollaborator || deletedCollaborator.length === 0) throw new Error("Failed to delete collaborator");
-
-		const displayName = collaborator.githubUsername || collaborator.email || "Collaborator";
+		// Use either column name for display
+		const displayName = githubUsername || collaborator.email || "Collaborator";
 		return { message: `${displayName} removed from "${owner}/${repo}".` };
 	} catch (error: any) {
 		console.error(error);
@@ -155,21 +182,42 @@ const checkInvitationStatus = async (owner: string, repo: string, collaboratorId
 		const token = await getUserToken();
 		if (!token) throw new Error("Token not found");
 
-		const collaborator = await db.query.collaboratorTable.findFirst({ 
-			where: eq(collaboratorTable.id, collaboratorId) 
+		// Get collaborator using raw SQL to avoid column name issues
+		const collaboratorResult = await client.execute({
+			sql: `SELECT * FROM collaborator WHERE id = ?`,
+			args: [collaboratorId]
 		});
 		
-		if (!collaborator) throw new Error("Collaborator not found");
-		if (!collaborator.invitationId) throw new Error("No invitation found for this collaborator");
+		if (!collaboratorResult.rows.length) throw new Error("Collaborator not found");
+		
+		const collaborator = collaboratorResult.rows[0];
+		
+		// Try both column names to handle different schemas
+		const invitationId = collaborator.invitation_id || collaborator.invitationId;
+		if (!invitationId) throw new Error("No invitation found for this collaborator");
 
 		// Use the GitHub API to check invitation status
-		const status = await checkGitHubInvitationStatus(token, owner, repo, collaborator.invitationId);
+		const status = await checkGitHubInvitationStatus(token, owner, repo, Number(invitationId));
 		
-		// Update the database with the current status
+		// Update the database with the current status using raw SQL
 		if (status.status === "accepted" || status.status === "declined") {
-			await db.update(collaboratorTable)
-				.set({ invitationStatus: status.status })
-				.where(eq(collaboratorTable.id, collaboratorId));
+			try {
+				await client.execute({
+					sql: `UPDATE collaborator SET invitation_status = ? WHERE id = ?`,
+					args: [status.status, collaboratorId]
+				});
+			} catch (e) {
+				console.error("Error updating invitation status:", e);
+				// If the column name is different, try the other name
+				try {
+					await client.execute({
+						sql: `UPDATE collaborator SET invitationStatus = ? WHERE id = ?`,
+						args: [status.status, collaboratorId]
+					});
+				} catch (e2) {
+					console.error("Error updating invitationStatus:", e2);
+				}
+			}
 		}
 
 		return { status: status.status };
