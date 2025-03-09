@@ -3,8 +3,8 @@
 import { getAuth } from "@/lib/auth";
 import { getInstallations, getInstallationRepos } from "@/lib/githubApp";
 import { getUserToken } from "@/lib/token";
-import { db } from "@/db";
-import { and, eq} from "drizzle-orm";
+import { db, client } from "@/db";
+import { and, eq, sql} from "drizzle-orm";
 import { collaboratorTable } from "@/db/schema";
 import { z } from "zod";
 import { 
@@ -53,32 +53,43 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 		const installationRepos = await getInstallationRepos(token, installations[0].id, [repo]);
 		if (installationRepos.length !== 1) throw new Error(`"${owner}/${repo}" is not part of your GitHub App installations`);
 
-		// Check if user is already invited
-		const collaborator = await db.query.collaboratorTable.findFirst({
-			where: and(
-        eq(collaboratorTable.ownerId, installationRepos[0].owner.id),
-        eq(collaboratorTable.repoId, installationRepos[0].id),
-				eq(collaboratorTable.githubUsername, username)
-      ),
+		// Check if user is already invited - using the client directly to avoid column name issues
+		const checkResult = await client.execute({
+			sql: `SELECT * FROM collaborator 
+				WHERE owner_id = ? AND repo_id = ? AND github_username = ?`,
+			args: [installationRepos[0].owner.id, installationRepos[0].id, username]
 		});
-		if (collaborator) throw new Error(`${username} is already invited to "${owner}/${repo}".`);
+		
+		if (checkResult.rows.length > 0) {
+			throw new Error(`${username} is already invited to "${owner}/${repo}".`);
+		}
 
 		// Invite via GitHub API
 		const invitation = await inviteGitHubCollaborator(token, owner, repo, username);
 
-		// Store in database
-		const newCollaborator = await db.insert(collaboratorTable).values({
-			type: installationRepos[0].owner.type === "User" ? "user" : "org",
-			installationId: installations[0].id,
-			ownerId: installationRepos[0].owner.id,
-			repoId: installationRepos[0].id,
-			owner: installationRepos[0].owner.login,
-			repo: installationRepos[0].name,
-			githubUsername: username,
-			invitationId: invitation.invitationId,
-			invitationStatus: "pending",
-			invitedBy: user.id
-		}).returning();
+		// Store in database - using the client directly to avoid column name issues
+		const result = await client.execute({
+			sql: `INSERT INTO collaborator (
+				type, installation_id, owner_id, repo_id, owner, repo, 
+				github_username, invitation_id, invitation_status, invited_by
+			) VALUES (
+				?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+			) RETURNING *`,
+			args: [
+				installationRepos[0].owner.type === "User" ? "user" : "org",
+				installations[0].id,
+				installationRepos[0].owner.id,
+				installationRepos[0].id,
+				installationRepos[0].owner.login,
+				installationRepos[0].name,
+				username,
+				invitation.invitationId,
+				"pending",
+				user.id
+			]
+		});
+		
+		const newCollaborator = result.rows;
 
 		return {
 			message: `${username} invited to "${owner}/${repo}". They will receive a notification on GitHub.`,

@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import * as schema from './schema';
 import { createClient } from "@libsql/client";
 
-const client = createClient({
+export const client = createClient({
   url: process.env.SQLITE_URL!,
   authToken: process.env.SQLITE_AUTH_TOKEN
 });
