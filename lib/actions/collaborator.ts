@@ -95,7 +95,23 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 				]
 			});
 			
-			newCollaborator = result.rows;
+			// Create a properly formatted collaborator object that matches what the UI expects
+			newCollaborator = result.rows.map(row => {
+				// Transform the raw DB row into the expected format
+				return {
+					id: row.id,
+					type: row.type,
+					installationId: row.installation_id,
+					ownerId: row.owner_id,
+					repoId: row.repo_id,
+					owner: row.owner,
+					repo: row.repo,
+					invitationId: row.invitation_id,
+					invitationStatus: row.invitation_status || "pending",
+					invitedBy: row.invited_by,
+					githubUsername: username, // Add the GitHub username explicitly
+				};
+			});
 			
 			// Try to update the github_username separately if the column exists
 			try {
@@ -110,6 +126,16 @@ const handleAddCollaborator = async (prevState: any, formData: FormData) => {
 		} catch (dbError) {
 			// If the insertion fails, we still want to show success since the GitHub invitation was sent
 			console.error("Database error when storing collaborator:", dbError);
+			
+			// Create a minimal collaborator object so the UI can still show something
+			newCollaborator = [{
+				id: Date.now(), // Temporary ID
+				githubUsername: username,
+				invitationStatus: "pending",
+				invitationId: invitation.invitationId,
+				owner: owner,
+				repo: repo
+			}];
 		}
 
 		return {
