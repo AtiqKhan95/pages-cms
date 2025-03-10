@@ -1,9 +1,65 @@
 import { z } from "zod";
 
+// Define the schema for repository definitions
+const RepositorySchema = z.object({
+  name: z.string({
+    required_error: "'name' is required.",
+    invalid_type_error: "'name' must be a string.",
+  }),
+  repo: z.string({
+    required_error: "'repo' is required.",
+    invalid_type_error: "'repo' must be a string.",
+  }),
+  path: z.string({
+    required_error: "'path' is required.",
+    invalid_type_error: "'path' must be a string.",
+  }).regex(/^[^/].*[^/]$|^\/$/, {
+    message: "'path' must be a valid relative path (no leading or trailing slash) or root '/'."
+  }),
+  owner: z.string().optional(),
+});
+
+// Define the schema for a single media configuration
+const SingleMediaSchema = z.object({
+  name: z.string({
+    required_error: "'name' is required.",
+    invalid_type_error: "'name' must be a string.",
+  }),
+  repository: z.string().optional(),
+  input: z.string({
+    message: "'input' is required."
+  }).regex(/^[^/].*[^/]$|^$/, {
+    message: "'input' must be a valid relative path (no leading or trailing slash)."
+  }),
+  output: z.string({
+    message: "'output' is required."
+  }).regex(/^(\/?[^/].*[^/]$|^\/?$)/, {
+    message: "'output' must be a valid path with no trailing slash."
+  }),
+  path: z.string().regex(/^[^/].*[^/]$|^$/, {
+    message: "'path' must be a valid relative path (no leading or trailing slash)."
+  }).optional(),
+  extensions: z.array(z.string({
+    message: "Entries in the 'extensions' array must be strings."
+  }), {
+    message: "'extensions' must be an array of strings."
+  }).optional(),
+  categories: z.array(z.enum(["image", "document", "video", "audio", "compressed"], {
+    message: "Entries in the 'categories' array must be 'image', 'document', 'video', 'audio', or 'compressed'."
+  }), {
+    message: "'categories' must be an array of strings."
+  }).optional(),
+}, {
+  message: "Media configuration must be an object with 'name', 'input', and 'output' attributes."
+}).strict();
+
+// Define the schema for media configuration
 const MediaSchema = z.union([
+  // Legacy string format
   z.string().regex(/^[^/].*[^/]$|^$/, {
     message: "'media' must be a valid relative path (no leading or trailing slash)."
   }),
+  // Legacy object format
   z.object({
     input: z.string({
       message: "'input' is required."
@@ -30,9 +86,14 @@ const MediaSchema = z.union([
     }).optional(),
   }, {
     message: "'media' must be a string (relative path) or an object with 'input' and 'output' attributes."
-  }).strict()
+  }).strict(),
+  // New array format for multiple media folders
+  z.array(SingleMediaSchema, {
+    message: "'media' must be an array of media configurations."
+  })
 ]);
 
+// Define the schema for field objects
 const FieldObjectSchema: z.ZodType<any> = z.lazy(() => z.object({
   name: z.string({
     required_error: "'name' is required.",
@@ -97,6 +158,7 @@ const ContentObjectSchema = z.object({
   }).regex(/^[a-zA-Z0-9-_]+$/, {
     message: "'name' must be alphanumeric with dashes and underscores.",
   }),
+  repository: z.string().optional(),
   label: z.string().optional(),
   description: z.string().optional().nullable(),
   icon: z.string().optional(),
@@ -180,6 +242,9 @@ const ContentObjectSchema = z.object({
 
 // Define the main schema
 const ConfigSchema = z.object({
+  repositories: z.array(RepositorySchema, {
+    message: "'repositories' must be an array of repository definitions."
+  }).optional(),
   media: MediaSchema.optional(),
   content: z.array(ContentObjectSchema, {
     message: "'content' must be an array of objects with at least one entry."

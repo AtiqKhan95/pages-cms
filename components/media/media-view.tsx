@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useConfig } from "@/contexts/config-context";
+import { useBranchEdit } from "@/contexts/branch-edit-context";
 import {
   extensionCategories,
   sortFiles,
@@ -43,6 +44,7 @@ const MediaView = ({
   onSelect?: (newSelected: string[]) => void
 }) => {
   const { config } = useConfig();
+  const { canEdit, isContentEditable, selectedRepository } = useBranchEdit();
   if (!config) throw new Error(`Configuration not found.`);
 
   const searchParams = useSearchParams();
@@ -130,6 +132,11 @@ const MediaView = ({
       return sortFiles([...prevData, parent]);
     });
   }, []);
+
+  // Check if the current path is editable based on the selected repository
+  const isPathEditable = useCallback((mediaPath: string) => {
+    return isContentEditable(mediaPath);
+  }, [isContentEditable]);
 
   const handleNavigate = (newPath: string) => {
     setPath(newPath);
@@ -233,6 +240,14 @@ const MediaView = ({
 
   return (
     <div className="flex-1 flex flex-col space-y-4">
+      {/* Show repository selection indicator when on a user branch */}
+      {canEdit && selectedRepository && (
+        <div className="bg-muted text-muted-foreground px-4 py-2 rounded-md mb-4 flex items-center">
+          <Upload className="h-4 w-4 mr-2" />
+          <span>You are editing media in <strong>{selectedRepository.name}</strong>. Media outside this repository is disabled.</span>
+        </div>
+      )}
+      
       <header className="flex items-center gap-x-2">
         <div className="sm:flex-1">
           <PathBreadcrumb path={path} rootPath={config.object.media.input} handleNavigate={handleNavigate} className="hidden sm:block"/>
@@ -240,17 +255,33 @@ const MediaView = ({
             <CornerLeftUp className="w-4 h-4"/>
           </Button>
         </div>
-        <FolderCreate path={path} type="media" onCreate={handleFolderCreate}>
-          <Button type="button" variant="outline" className="ml-auto" size="icon-sm">
-            <FolderPlus className="h-3.5 w-3.5"/>
-          </Button>
-        </FolderCreate>
-        <MediaUpload path={path} onUpload={handleUpload}>
-          <Button type="button" size="sm" className="gap-2">
-            <Upload className="h-3.5 w-3.5"/>
-            Upload
-          </Button>
-        </MediaUpload>
+        
+        {/* Only show folder creation and upload buttons if the current path is editable */}
+        {canEdit && isPathEditable(path) ? (
+          <>
+            <FolderCreate path={path} type="media" onCreate={handleFolderCreate}>
+              <Button type="button" variant="outline" className="ml-auto" size="icon-sm">
+                <FolderPlus className="h-3.5 w-3.5"/>
+              </Button>
+            </FolderCreate>
+            <MediaUpload path={path} onUpload={handleUpload}>
+              <Button type="button" size="sm" className="gap-2">
+                <Upload className="h-3.5 w-3.5"/>
+                Upload
+              </Button>
+            </MediaUpload>
+          </>
+        ) : (
+          <>
+            <Button type="button" variant="outline" className="ml-auto" size="icon-sm" disabled>
+              <FolderPlus className="h-3.5 w-3.5"/>
+            </Button>
+            <Button type="button" size="sm" className="gap-2" disabled>
+              <Upload className="h-3.5 w-3.5"/>
+              Upload
+            </Button>
+          </>
+        )}
       </header>
       <div className="relative flex-1 overflow-auto scrollbar" ref={filesGridRef}>
         {isLoading
@@ -295,11 +326,17 @@ const MediaView = ({
                                   <div className="text-sm font-medium truncate">{item.name}</div>
                                   <div className="text-xs text-muted-foreground truncate">{getFileSize(item.size)}</div>
                                 </div>
-                                <FileOptions path={item.path} sha={item.sha} type="media" onDelete={handleDelete} onRename={handleRename} portalProps={{container: filesGridRef.current}}>
-                                  <Button variant="ghost" size="icon" className="shrink-0">
+                                {canEdit && isPathEditable(item.path) ? (
+                                  <FileOptions path={item.path} sha={item.sha} type="media" onDelete={handleDelete} onRename={handleRename} portalProps={{container: filesGridRef.current}}>
+                                    <Button variant="ghost" size="icon" className="shrink-0">
+                                      <EllipsisVertical className="h-4 w-4" />
+                                    </Button>
+                                  </FileOptions>
+                                ) : (
+                                  <Button variant="ghost" size="icon" className="shrink-0 opacity-50" disabled>
                                     <EllipsisVertical className="h-4 w-4" />
                                   </Button>
-                                </FileOptions>
+                                )}
                               </div>
                               {onSelect && selected.includes(item.path) &&
                                 <div className="text-primary-foreground bg-primary p-0.5 rounded-full absolute top-2 left-2">

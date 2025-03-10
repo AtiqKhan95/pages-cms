@@ -6,6 +6,13 @@ import { useConfig } from "@/contexts/config-context";
 import { useUser } from "@/contexts/user-context";
 import { BranchStatus } from "@/app/api/[owner]/[repo]/branches/status/route";
 
+interface Repository {
+  name: string;
+  repo: string;
+  path: string;
+  owner?: string;
+}
+
 interface BranchEditContextType {
   canEdit: boolean;
   isUserBranch: boolean;
@@ -16,6 +23,10 @@ interface BranchEditContextType {
   branchStatus: BranchStatus | undefined;
   hasPullRequest: boolean;
   isMerged: boolean;
+  selectedRepository: Repository | null;
+  setSelectedRepository: (repository: Repository | null) => void;
+  repositories: Repository[];
+  isContentEditable: (contentPath: string) => boolean;
 }
 
 const BranchEditContext = createContext<BranchEditContextType | undefined>(undefined);
@@ -40,7 +51,36 @@ export const BranchEditProvider = ({
   const [isUserBranch, setIsUserBranch] = useState<boolean>(false);
   const [hasPendingChanges, setHasPendingChanges] = useState<boolean>(false);
   const [branchStatus, setBranchStatus] = useState<BranchStatus | undefined>(undefined);
+  const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null);
+  const [repositories, setRepositories] = useState<Repository[]>([]);
   
+  // Load repositories from config
+  useEffect(() => {
+    if (config?.object?.repositories) {
+      setRepositories(config.object.repositories);
+      
+      // If no repository is selected, default to the main repository
+      if (!selectedRepository && config.object.repositories.length > 0) {
+        const mainRepo = config.object.repositories.find((repo: Repository) => repo.path === "/" || repo.path === "");
+        if (mainRepo) {
+          setSelectedRepository(mainRepo);
+        } else {
+          setSelectedRepository(config.object.repositories[0]);
+        }
+      }
+    } else {
+      // Create a default repository if none are defined
+      const defaultRepo: Repository = {
+        name: "Main Repository",
+        repo: config?.repo || repo,
+        owner: config?.owner || owner,
+        path: "/"
+      };
+      setRepositories([defaultRepo]);
+      setSelectedRepository(defaultRepo);
+    }
+  }, [config, owner, repo]);
+
   // Check if the current branch was created by the user and get its status
   useEffect(() => {
     const checkBranchOwnership = async () => {
@@ -75,6 +115,25 @@ export const BranchEditProvider = ({
     checkBranchOwnership();
   }, [config, user, defaultBranch, branchStatuses]);
   
+  // Function to check if content is editable based on the selected repository
+  const isContentEditable = (contentPath: string): boolean => {
+    if (!selectedRepository || !contentPath) {
+      return false;
+    }
+    
+    // If the selected repository is the main repository (path is "/" or "")
+    if (selectedRepository.path === "/" || selectedRepository.path === "") {
+      // Check if the content path is within any submodule repository
+      return !repositories.some(repo => 
+        repo !== selectedRepository && 
+        (contentPath === repo.path || contentPath.startsWith(`${repo.path}/`))
+      );
+    }
+    
+    // For submodule repositories, content is editable if it's within the repository path
+    return contentPath === selectedRepository.path || contentPath.startsWith(`${selectedRepository.path}/`);
+  };
+
   // Function to create a pull request
   const createPullRequest = async (title?: string, description?: string, targetRepo?: string) => {
     if (!config) {
@@ -142,7 +201,11 @@ export const BranchEditProvider = ({
         createPullRequest,
         branchStatus,
         hasPullRequest,
-        isMerged
+        isMerged,
+        selectedRepository,
+        setSelectedRepository,
+        repositories,
+        isContentEditable
       }}
     >
       {children}

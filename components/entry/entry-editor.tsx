@@ -50,7 +50,7 @@ export function EntryEditor({
   const router = useRouter();
   
   const { config } = useConfig();
-  const { canEdit, readOnly, setPendingChanges } = useBranchEdit();
+  const { canEdit, readOnly, setPendingChanges, isContentEditable, selectedRepository } = useBranchEdit();
   if (!config) throw new Error(`Configuration not found.`);
   
   let schema = useMemo(() => {
@@ -326,8 +326,14 @@ export function EntryEditor({
     </div>
   ), [displayTitle, navigateBack, path]);
 
+  // Check if the content is editable based on the selected repository
+  const contentIsEditable = useMemo(() => {
+    if (path === ".pages.yml") return true; // Always allow editing settings
+    return isContentEditable(path || (parent ?? schema?.path));
+  }, [path, parent, schema, isContentEditable]);
+
   // We'll determine if we're in read-only mode
-  const isReadOnly = !canEdit && path !== ".pages.yml";
+  const isReadOnly = (!canEdit || !contentIsEditable) && path !== ".pages.yml";
 
   if (error) {
     // TODO: should we use a custom error class with code?
@@ -361,10 +367,18 @@ export function EntryEditor({
       {isReadOnly && <RepoMakeChangesButton />}
       
       {/* Show read-only indicator when not on a user branch */}
-      {isReadOnly && (
+      {!canEdit && (
         <div className="bg-muted text-muted-foreground px-4 py-2 rounded-md mb-4 flex items-center">
           <GitBranch className="h-4 w-4 mr-2" />
           <span>You are in read-only mode. Create a branch to make changes.</span>
+        </div>
+      )}
+      
+      {/* Show repository selection indicator when on a user branch but content is not editable */}
+      {canEdit && !contentIsEditable && selectedRepository && path !== ".pages.yml" && (
+        <div className="bg-muted text-muted-foreground px-4 py-2 rounded-md mb-4 flex items-center">
+          <GitBranch className="h-4 w-4 mr-2" />
+          <span>This content is outside of <strong>{selectedRepository.name}</strong> and cannot be edited. Create a new branch to edit this content.</span>
         </div>
       )}
       

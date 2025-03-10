@@ -26,51 +26,132 @@ const normalizeConfig = (configObject: any) => {
 
   const configObjectCopy = JSON.parse(JSON.stringify(configObject));
   
+  // Normalize repositories if present
+  if (configObjectCopy?.repositories != null && Array.isArray(configObjectCopy.repositories)) {
+    configObjectCopy.repositories = configObjectCopy.repositories.map((repo: any) => {
+      // Ensure path is properly formatted
+      if (repo.path && repo.path !== "/") {
+        repo.path = repo.path.replace(/^\/|\/$/g, "");
+      }
+      return repo;
+    });
+    
+    // Add a default main repository if not present
+    const hasMainRepo = configObjectCopy.repositories.some((repo: any) => repo.path === "/" || repo.path === "");
+    if (!hasMainRepo && configObjectCopy.owner && configObjectCopy.repo) {
+      configObjectCopy.repositories.unshift({
+        name: "Main Repository",
+        repo: configObjectCopy.repo,
+        owner: configObjectCopy.owner,
+        path: "/"
+      });
+    }
+  } else if (configObjectCopy.owner && configObjectCopy.repo) {
+    // Create a default repositories array if not present
+    configObjectCopy.repositories = [{
+      name: "Main Repository",
+      repo: configObjectCopy.repo,
+      owner: configObjectCopy.owner,
+      path: "/"
+    }];
+  }
+  
+  // Normalize media configuration
   if (configObjectCopy?.media != null) {
     if (typeof configObjectCopy.media === "string") {
-      // Ensure media.input is a relative path
+      // Convert string format to object format
       const relativePath = configObjectCopy.media.replace(/^\/|\/$/g, "");
-      configObjectCopy.media = {
+      configObjectCopy.media = [{
+        name: "Main Media",
         input: relativePath,
         output: `/${relativePath}`,
-      };
-    } else {
-      if (configObjectCopy.media?.input != null && typeof configObjectCopy.media.input === "string") {
+      }];
+    } else if (Array.isArray(configObjectCopy.media)) {
+      // Normalize array format
+      configObjectCopy.media = configObjectCopy.media.map((mediaItem: any) => {
         // Make sure input is relative
-        configObjectCopy.media.input = configObjectCopy.media.input.replace(/^\/|\/$/g, "");
+        if (mediaItem.input) {
+          mediaItem.input = mediaItem.input.replace(/^\/|\/$/g, "");
+        }
+        
+        // Make sure output doesn't have a trailing slash
+        if (mediaItem.output && mediaItem.output !== "/") {
+          mediaItem.output = mediaItem.output.replace(/\/$/, "");
+        }
+        
+        // Convert categories to extensions if needed
+        if (mediaItem.categories != null) {
+          if (mediaItem.extensions != null) {
+            delete mediaItem.categories;
+          } else if (Array.isArray(mediaItem.categories)) {
+            mediaItem.extensions = [];
+            mediaItem.categories.forEach((category: string) => {
+              if (extensionCategories[category] != null) {
+                mediaItem.extensions = mediaItem.extensions.concat(extensionCategories[category]);
+              }
+            });
+            delete mediaItem.categories;
+          }
+        }
+        
+        return mediaItem;
+      });
+    } else {
+      // Convert legacy object format to array format
+      const mediaObject = { ...configObjectCopy.media };
+      
+      // Make sure input is relative
+      if (mediaObject.input != null && typeof mediaObject.input === "string") {
+        mediaObject.input = mediaObject.input.replace(/^\/|\/$/g, "");
       }
-      if (configObjectCopy.media.output != null && configObjectCopy.media.output !== "/" && typeof configObjectCopy.media.output === "string") {
-        // Make sure output doesn"t have a trailing slash
-        configObjectCopy.media.output = configObjectCopy.media.output.replace(/\/$/, "");
+      
+      // Make sure output doesn't have a trailing slash
+      if (mediaObject.output != null && mediaObject.output !== "/" && typeof mediaObject.output === "string") {
+        mediaObject.output = mediaObject.output.replace(/\/$/, "");
       }
-      if (configObjectCopy.media.categories != null) {
-        if (configObjectCopy.media.extensions != null) {
-          delete configObjectCopy.media.categories;
-        } else if (Array.isArray(configObjectCopy.media.categories)) {
-          configObjectCopy.media.extensions = [];
-          configObjectCopy.media.categories.map((category: string) => {
+      
+      // Convert categories to extensions if needed
+      if (mediaObject.categories != null) {
+        if (mediaObject.extensions != null) {
+          delete mediaObject.categories;
+        } else if (Array.isArray(mediaObject.categories)) {
+          mediaObject.extensions = [];
+          mediaObject.categories.forEach((category: string) => {
             if (extensionCategories[category] != null) {
-              configObjectCopy.media.extensions = configObjectCopy.media.extensions.concat(extensionCategories[category]);
+              mediaObject.extensions = mediaObject.extensions.concat(extensionCategories[category]);
             }
           });
-          delete configObjectCopy.media.categories;
+          delete mediaObject.categories;
         }
       }
+      
+      configObjectCopy.media = [{
+        name: "Main Media",
+        ...mediaObject
+      }];
     }
   }
 
+  // Normalize content configuration
   if (configObjectCopy.content && Array.isArray(configObjectCopy?.content) && configObjectCopy.content.length > 0) {
     configObjectCopy.content = configObjectCopy.content.map((item: any) => {
+      // Ensure path is properly formatted
       if (item.path != null) {
         item.path = item.path.replace(/^\/|\/$/g, "");
       }
+      
+      // Set default filename for collections
       if (item.filename == null && item.type === "collection") {
         item.filename = "{year}-{month}-{day}-{primary}.md";
       }
+      
+      // Determine file extension
       if (item.extension == null) {
         const filename = item.type === "file" ? item.path : item.filename;
         item.extension = getFileExtension(filename);
       }
+      
+      // Determine format based on extension
       if (item.format == null) {
         item.format = "raw";
         const codeExtensions = ["yaml", "yml", "javascript", "js", "jsx", "typescript", "ts", "tsx", "json", "html", "htm", "markdown", "md", "mdx"];
@@ -98,6 +179,12 @@ const normalizeConfig = (configObject: any) => {
           item.format = "datagrid";
         }
       }
+      
+      // If repository is not specified, default to "Main Repository"
+      if (!item.repository && configObjectCopy.repositories?.length > 0) {
+        item.repository = configObjectCopy.repositories[0].name;
+      }
+      
       return item;
     });
   }

@@ -52,7 +52,7 @@ export function CollectionView({
   const router = useRouter();
 
   const { config } = useConfig();
-  const { canEdit } = useBranchEdit();
+  const { canEdit, isContentEditable, selectedRepository } = useBranchEdit();
   if (!config) throw new Error(`Configuration not found.`);
 
   const schema = useMemo(() => getSchemaByName(config?.object, name), [config, name]);
@@ -156,7 +156,10 @@ export function CollectionView({
           if (field.name === primaryField) {
             return (
               <Link
-                className="font-medium truncate"
+                className={cn(
+                  "font-medium truncate",
+                  !canEdit || !isContentEditable(row.original.path) ? "pointer-events-none opacity-70" : ""
+                )}
                 href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/edit/${encodeURIComponent(row.original.path)}`}
               >
                 {CellView}
@@ -176,23 +179,39 @@ export function CollectionView({
     tableColumns.push({
       accessorKey: "actions",
       header: "Actions",
-      cell: ({ row }: { row: any }) => (
-        <div className="flex gap-1">
-          <Link
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8")}
-            href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${name}/edit/${encodeURIComponent(row.original.path)}`}
-          >
-            Edit
-          </Link>
-          {canEdit && (
-            <FileOptions path={row.original.path} sha={row.original.sha} type="collection" name={name} onDelete={handleDelete} onRename={handleRename}>
-              <Button variant="outline" size="icon-sm" className="h-8">
+      cell: ({ row }: { row: any }) => {
+        // Check if the content is editable based on the selected repository
+        const contentIsEditable = isContentEditable(row.original.path);
+        
+        return (
+          <div className="flex gap-1">
+            <Link
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }), 
+                "h-8",
+                !canEdit || !contentIsEditable ? "pointer-events-none opacity-50" : ""
+              )}
+              href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${name}/edit/${encodeURIComponent(row.original.path)}`}
+              aria-disabled={!canEdit || !contentIsEditable}
+              tabIndex={!canEdit || !contentIsEditable ? -1 : undefined}
+            >
+              Edit
+            </Link>
+            {canEdit && contentIsEditable && (
+              <FileOptions path={row.original.path} sha={row.original.sha} type="collection" name={name} onDelete={handleDelete} onRename={handleRename}>
+                <Button variant="outline" size="icon-sm" className="h-8">
+                  <Ellipsis className="h-4 w-4" />
+                </Button>
+              </FileOptions>
+            )}
+            {canEdit && !contentIsEditable && (
+              <Button variant="outline" size="icon-sm" className="h-8 opacity-50" disabled>
                 <Ellipsis className="h-4 w-4" />
               </Button>
-            </FileOptions>
-          )}
-        </div>
-      ),
+            )}
+          </div>
+        );
+      },
       enableSorting: false
     });
 
@@ -351,6 +370,14 @@ export function CollectionView({
             <span>You are in read-only mode. Create a branch to make changes.</span>
           </div>
         )}
+        
+        {/* Show repository selection indicator when on a user branch */}
+        {canEdit && selectedRepository && (
+          <div className="bg-muted text-muted-foreground px-4 py-2 rounded-md mb-4 flex items-center">
+            <GitBranch className="h-4 w-4 mr-2" />
+            <span>You are editing content in <strong>{selectedRepository.name}</strong>. Content outside this repository is disabled.</span>
+          </div>
+        )}
         <header className="flex items-center gap-x-2">
           <div className="sm:flex-1">
             <PathBreadcrumb path={path || schema.path} rootPath={schema.path} handleNavigate={handleNavigate} className="hidden sm:block"/>
@@ -364,23 +391,40 @@ export function CollectionView({
           </div>
           {canEdit && (
             <>
-              <FolderCreate path={path || schema.path} type="content" name={name} onCreate={handleFolderCreate}>
-                <Button type="button" variant="outline" className="ml-auto shrink-0" size="icon-sm">
-                  <FolderPlus className="h-3.5 w-3.5"/>
-                </Button>
-              </FolderCreate>
-              <Link
-                className={cn(buttonVariants({size: "sm"}), "hidden sm:flex")}
-                href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new${path && path !== schema.path ? `?parent=${encodeURIComponent(path)}` : ""}`}
-              >
-                  Add an entry
-              </Link>
-              <Link
-                className={cn(buttonVariants({size: "icon-sm"}), "sm:hidden shrink-0")}
-                href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new`}
-              >
-                  <Plus className="h-4 w-4"/>
-              </Link>
+              {/* Only show folder creation and add entry buttons if the current path is editable */}
+              {isContentEditable(path || schema.path) ? (
+                <>
+                  <FolderCreate path={path || schema.path} type="content" name={name} onCreate={handleFolderCreate}>
+                    <Button type="button" variant="outline" className="ml-auto shrink-0" size="icon-sm">
+                      <FolderPlus className="h-3.5 w-3.5"/>
+                    </Button>
+                  </FolderCreate>
+                  <Link
+                    className={cn(buttonVariants({size: "sm"}), "hidden sm:flex")}
+                    href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new${path && path !== schema.path ? `?parent=${encodeURIComponent(path)}` : ""}`}
+                  >
+                      Add an entry
+                  </Link>
+                  <Link
+                    className={cn(buttonVariants({size: "icon-sm"}), "sm:hidden shrink-0")}
+                    href={`/${config.owner}/${config.repo}/${encodeURIComponent(config.branch)}/collection/${encodeURIComponent(name)}/new`}
+                  >
+                      <Plus className="h-4 w-4"/>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Button type="button" variant="outline" className="ml-auto shrink-0" size="icon-sm" disabled>
+                    <FolderPlus className="h-3.5 w-3.5"/>
+                  </Button>
+                  <Button variant="default" size="sm" className="hidden sm:flex opacity-50" disabled>
+                    Add an entry
+                  </Button>
+                  <Button variant="default" size="icon-sm" className="sm:hidden shrink-0 opacity-50" disabled>
+                    <Plus className="h-4 w-4"/>
+                  </Button>
+                </>
+              )}
             </>
           )}
         </header>
